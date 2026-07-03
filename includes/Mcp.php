@@ -2,6 +2,10 @@
 /**
  * MCP server registration via the official wordpress/mcp-adapter.
  *
+ * The adapter is shared infrastructure: its hook names and singleton are
+ * global, so all plugins on a site must share ONE copy. We ship ours via the
+ * Jetpack Autoloader (same as WooCommerce) so the newest version wins.
+ *
  * @package FlavourSuite\Ai
  */
 
@@ -16,8 +20,8 @@ defined( 'ABSPATH' ) || exit;
 final class Mcp {
 
 	public static function register(): void {
-		// Vendor may be absent (source checkout without composer install) or another
-		// plugin may ship a conflicting copy — degrade gracefully, never fatal.
+		// Vendor may be absent (source checkout without composer install) —
+		// degrade gracefully, never fatal.
 		if ( ! class_exists( McpAdapter::class ) ) {
 			add_action( 'admin_notices', array( self::class, 'adapter_missing_notice' ) );
 			return;
@@ -31,9 +35,31 @@ final class Mcp {
 	 * Registers the FlavourSuite MCP server.
 	 * Endpoint: /wp-json/flavoursuite-ai/mcp (Streamable HTTP).
 	 *
-	 * @param \WP\MCP\Core\McpAdapter $adapter The adapter singleton.
+	 * @param \WP\MCP\Core\McpAdapter $adapter The shared adapter singleton.
 	 */
 	public static function create_server( McpAdapter $adapter ): void {
+		static $registered = false;
+		if ( $registered ) {
+			return;
+		}
+		$registered = true;
+
+		$tools = array(
+			'flavoursuite/site-overview',
+			'flavoursuite/list-recent-posts',
+			'flavoursuite/search-content',
+		);
+
+		/**
+		 * Filters the ability names exposed as MCP tools on the FlavourSuite server.
+		 *
+		 * Integrations append their abilities here when their vendor plugin is
+		 * available (see Integrations\IntegrationRegistry).
+		 *
+		 * @param list<string> $tools Registered ability names.
+		 */
+		$tools = (array) apply_filters( 'flavoursuite/ai/mcp_tools', $tools );
+
 		$result = $adapter->create_server(
 			'flavoursuite-ai',
 			'flavoursuite-ai',
@@ -44,9 +70,7 @@ final class Mcp {
 			array( HttpTransport::class ),
 			ErrorLogMcpErrorHandler::class,
 			null,
-			array(
-				'flavoursuite/site-overview',
-			)
+			$tools
 		);
 
 		if ( is_wp_error( $result ) ) {

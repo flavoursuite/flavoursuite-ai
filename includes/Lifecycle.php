@@ -20,9 +20,14 @@ final class Lifecycle {
 		define( 'FLAVOURSUITE_AI_DIR', plugin_dir_path( $main_file ) );
 		define( 'FLAVOURSUITE_AI_URL', plugin_dir_url( $main_file ) );
 
-		$autoload = FLAVOURSUITE_AI_DIR . 'vendor/autoload.php';
-		if ( is_readable( $autoload ) ) {
-			require_once $autoload;
+		// Jetpack Autoloader: mcp-adapter is shared infrastructure (global hook
+		// names, singleton) — the newest copy on the site must win. WooCommerce
+		// ships the same package the same way.
+		$autoload_packages = FLAVOURSUITE_AI_DIR . 'vendor/autoload_packages.php';
+		if ( is_readable( $autoload_packages ) ) {
+			require_once $autoload_packages;
+		} elseif ( is_readable( FLAVOURSUITE_AI_DIR . 'vendor/autoload.php' ) ) {
+			require_once FLAVOURSUITE_AI_DIR . 'vendor/autoload.php';
 		}
 
 		add_action( 'plugins_loaded', array( self::class, 'boot_kernel' ), 5 );
@@ -37,6 +42,9 @@ final class Lifecycle {
 
 		Abilities::register();
 		Mcp::register();
+
+		// Priority 20: every plugin has loaded, so vendor detection is reliable.
+		add_action( 'plugins_loaded', array( Integrations\IntegrationRegistry::class, 'boot' ), 20 );
 
 		do_action( 'flavoursuite/ai/ready' );
 	}
