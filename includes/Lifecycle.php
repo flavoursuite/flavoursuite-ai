@@ -41,6 +41,7 @@ final class Lifecycle {
 		}
 
 		Abilities::register();
+		Settings::register();
 		Mcp::register();
 
 		// Priority 20: every plugin has loaded, so vendor detection is reliable.

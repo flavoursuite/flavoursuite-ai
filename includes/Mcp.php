@@ -20,6 +20,12 @@ defined( 'ABSPATH' ) || exit;
 final class Mcp {
 
 	public static function register(): void {
+		// Master switch (Settings → FlavourSuite AI): off by default, so a
+		// fresh install exposes no MCP route until the admin opts in.
+		if ( ! Settings::is_enabled() ) {
+			return;
+		}
+
 		// Vendor may be absent (source checkout without composer install) —
 		// degrade gracefully, never fatal.
 		if ( ! class_exists( McpAdapter::class ) ) {
@@ -32,18 +38,13 @@ final class Mcp {
 	}
 
 	/**
-	 * Registers the FlavourSuite MCP server.
-	 * Endpoint: /wp-json/flavoursuite-ai/mcp (Streamable HTTP).
+	 * Every ability name that COULD be exposed as an MCP tool (base list plus
+	 * whatever active integrations append). The settings page renders this
+	 * list; create_server() then drops tools the admin has switched off.
 	 *
-	 * @param \WP\MCP\Core\McpAdapter $adapter The shared adapter singleton.
+	 * @return list<string>
 	 */
-	public static function create_server( McpAdapter $adapter ): void {
-		static $registered = false;
-		if ( $registered ) {
-			return;
-		}
-		$registered = true;
-
+	public static function tool_names(): array {
 		$tools = array(
 			'flavoursuite/site-overview',
 			'flavoursuite/list-recent-posts',
@@ -59,6 +60,24 @@ final class Mcp {
 		 * @param list<string> $tools Registered ability names.
 		 */
 		$tools = (array) apply_filters( 'flavoursuite/ai/mcp_tools', $tools );
+
+		return array_values( array_unique( array_filter( $tools, 'is_string' ) ) );
+	}
+
+	/**
+	 * Registers the FlavourSuite MCP server.
+	 * Endpoint: /wp-json/flavoursuite-ai/mcp (Streamable HTTP).
+	 *
+	 * @param \WP\MCP\Core\McpAdapter $adapter The shared adapter singleton.
+	 */
+	public static function create_server( McpAdapter $adapter ): void {
+		static $registered = false;
+		if ( $registered ) {
+			return;
+		}
+		$registered = true;
+
+		$tools = array_values( array_filter( self::tool_names(), array( Settings::class, 'is_tool_enabled' ) ) );
 
 		$result = $adapter->create_server(
 			'flavoursuite-ai',
