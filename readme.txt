@@ -84,6 +84,11 @@ FluentCRM 3.0 or newer — that's where FluentCRM introduced its own abilities, 
 
 Only through you. Agents can *propose* changes (Additional CSS, post/page content), which appear as pending change requests under *Tools → Agent Changes* with a before/after diff. Nothing touches the live site until an administrator approves it there, and applied changes can be rolled back. The propose tools are also disabled by default — you switch them on per tool.
 
+== Screenshots ==
+
+1. Settings → FlavourSuite AI: master switch, per-tool toggles (write tools flagged and off by default), and the agent connection snippet.
+2. Tools → Agent Changes: a pending agent proposal shown as a before/after diff with Approve & apply, Reject, and rollback for applied changes.
+
 == Changelog ==
 
 = 0.2.0 =

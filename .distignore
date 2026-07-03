@@ -1,0 +1,13 @@
+# Excluded from release ZIPs (bin/build-zip.sh). vendor/ is rebuilt in the
+# staging dir with --no-dev so dev-only packages never ship.
+.git
+.gitignore
+.distignore
+.DS_Store
+*.log
+/vendor/
+/node_modules/
+/build/
+/dist/
+/bin/
+/.wordpress-org/
