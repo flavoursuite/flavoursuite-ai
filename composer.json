@@ -1,0 +1,23 @@
+{
+    "name": "flavoursuite/flavoursuite-ai",
+    "description": "Make your WordPress site agent-ready: safely expose site data and actions to AI agents via the Model Context Protocol.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=8.1",
+        "wordpress/mcp-adapter": "^0.5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "FlavourSuite\\Ai\\": "includes/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/installers": true,
+            "automattic/jetpack-autoloader": true
+        }
+    }
+}
