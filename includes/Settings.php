@@ -190,6 +190,14 @@ final class Settings {
 				<?php esc_html_e( 'Authenticate with an Application Password (create one under Users → Profile) via HTTP Basic auth. Example client configuration:', 'flavoursuite-ai' ); ?>
 			</p>
 			<pre style="background:#f6f7f7;border:1px solid #dcdcde;padding:12px;overflow:auto;"><code><?php echo esc_html( $snippet ); ?></code></pre>
+
+			<hr />
+
+			<h2><?php esc_html_e( 'Recent agent activity', 'flavoursuite-ai' ); ?></h2>
+			<p class="description">
+				<?php esc_html_e( 'The last tool calls made through the MCP server. Arguments and results are never stored.', 'flavoursuite-ai' ); ?>
+			</p>
+			<?php AuditLog::render_table(); ?>
 		</div>
 		<?php
 	}

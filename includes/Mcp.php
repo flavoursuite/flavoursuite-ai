@@ -88,7 +88,7 @@ final class Mcp {
 			FLAVOURSUITE_AI_VERSION,
 			array( HttpTransport::class ),
 			ErrorLogMcpErrorHandler::class,
-			null,
+			AuditLog::class,
 			$tools
 		);
 
