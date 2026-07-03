@@ -40,12 +40,21 @@ final class Settings {
 	}
 
 	public static function is_readonly( string $name ): bool {
+		return true === self::readonly_annotation( $name );
+	}
+
+	/**
+	 * Core defaults the readonly annotation to null ("not declared"), which
+	 * is a different trust level than an explicit false — third-party
+	 * abilities often declare nothing.
+	 */
+	public static function readonly_annotation( string $name ): ?bool {
 		$ability = wp_get_ability( $name );
 		if ( null === $ability ) {
-			return false;
+			return null;
 		}
 		$annotations = (array) $ability->get_meta_item( 'annotations', array() );
-		return ! empty( $annotations['readonly'] );
+		return isset( $annotations['readonly'] ) ? (bool) $annotations['readonly'] : null;
 	}
 
 	private static function get(): array {
@@ -161,8 +170,11 @@ final class Settings {
 										<input type="checkbox" name="<?php echo esc_attr( self::OPTION ); ?>[tools][<?php echo esc_attr( $name ); ?>]" value="1" <?php checked( self::is_tool_enabled( $name ) ); ?> />
 										<?php echo esc_html( $label ); ?>
 										<code><?php echo esc_html( $name ); ?></code>
-										<?php if ( ! self::is_readonly( $name ) ) : ?>
+										<?php $readonly = self::readonly_annotation( $name ); ?>
+										<?php if ( false === $readonly ) : ?>
 											<strong style="color:#b32d2e;"><?php esc_html_e( '(writes data)', 'flavoursuite-ai' ); ?></strong>
+										<?php elseif ( null === $readonly ) : ?>
+											<em style="color:#996800;"><?php esc_html_e( '(read-only not declared by vendor — off by default)', 'flavoursuite-ai' ); ?></em>
 										<?php endif; ?>
 									</label>
 								<?php endforeach; ?>

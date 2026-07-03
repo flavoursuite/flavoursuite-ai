@@ -29,6 +29,7 @@ final class IntegrationRegistry {
 	private static function integrations(): array {
 		return array(
 			new WooCommerce\Integration(),
+			new FluentCrm\Integration(),
 		);
 	}
 }
