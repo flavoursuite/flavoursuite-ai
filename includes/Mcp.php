@@ -50,6 +50,13 @@ final class Mcp {
 			'flavoursuite/list-recent-posts',
 			'flavoursuite/search-content',
 			'flavoursuite/site-policies',
+			'flavoursuite/get-custom-css',
+			'flavoursuite/list-change-requests',
+			// Propose tools never write to the live site — they create pending
+			// change requests a human approves in Tools → Agent Changes. Their
+			// readonly:false annotation still defaults them OFF in settings.
+			'flavoursuite/propose-css',
+			'flavoursuite/propose-content-edit',
 		);
 
 		/**
@@ -85,7 +92,7 @@ final class Mcp {
 			'flavoursuite-ai',
 			'mcp',
 			'FlavourSuite AI',
-			'Read-only FlavourSuite tools exposing this WordPress site to AI agents.',
+			'FlavourSuite tools exposing this WordPress site to AI agents. Reads are direct; writes are proposals that a human approves in wp-admin.',
 			FLAVOURSUITE_AI_VERSION,
 			array( HttpTransport::class ),
 			ErrorLogMcpErrorHandler::class,

@@ -16,7 +16,7 @@ final class Lifecycle {
 	 * deferred to plugins_loaded so nothing heavy runs at file load.
 	 */
 	public static function boot( string $main_file ): void {
-		define( 'FLAVOURSUITE_AI_VERSION', '0.1.0' );
+		define( 'FLAVOURSUITE_AI_VERSION', '0.2.0' );
 		define( 'FLAVOURSUITE_AI_DIR', plugin_dir_path( $main_file ) );
 		define( 'FLAVOURSUITE_AI_URL', plugin_dir_url( $main_file ) );
 
@@ -41,6 +41,9 @@ final class Lifecycle {
 		}
 
 		Abilities::register();
+		Approvals\ChangeRequests::register();
+		Approvals\Abilities::register();
+		Approvals\AdminPage::register();
 		Settings::register();
 		Mcp::register();
 
