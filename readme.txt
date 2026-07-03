@@ -1,4 +1,4 @@
-=== FlavourSuite AI — Agent-Ready WordPress (MCP Server) ===
+=== FlavourSuite AI ===
 Contributors: flavoursuite
 Tags: mcp, ai, agents, claude, woocommerce
 Requires at least: 6.9

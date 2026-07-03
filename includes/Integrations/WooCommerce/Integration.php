@@ -61,7 +61,7 @@ final class Integration implements IntegrationInterface {
 		);
 
 		if ( null === $ability ) {
-			error_log( 'FlavourSuite AI: failed to register flavoursuite/woo-store-overview ability.' );
+			\FlavourSuite\Ai\Log::debug( 'failed to register flavoursuite/woo-store-overview ability.' );
 		}
 	}
 

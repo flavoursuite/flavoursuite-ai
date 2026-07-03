@@ -38,7 +38,7 @@ final class Abilities {
 	 */
 	private static function guard( ?\WP_Ability $ability, string $name ): void {
 		if ( null === $ability ) {
-			error_log( sprintf( 'FlavourSuite AI: failed to register %s ability.', $name ) );
+			Log::debug( sprintf( 'failed to register %s ability.', $name ) );
 		}
 	}
 
@@ -283,7 +283,7 @@ final class Abilities {
 		$terms = trim( (string) ( $input['query'] ?? '' ) );
 		$limit = isset( $input['limit'] ) ? max( 1, min( 50, (int) $input['limit'] ) ) : 10;
 
-		if ( strlen( $terms ) < 2 ) {
+		if ( mb_strlen( $terms ) < 2 ) {
 			return new \WP_Error( 'flavoursuite_query_too_short', 'Search query must be at least 2 characters.' );
 		}
 

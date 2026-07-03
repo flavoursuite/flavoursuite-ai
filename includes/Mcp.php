@@ -93,7 +93,7 @@ final class Mcp {
 		);
 
 		if ( is_wp_error( $result ) ) {
-			error_log( 'FlavourSuite AI: MCP server registration failed — ' . $result->get_error_message() );
+			Log::debug( 'MCP server registration failed — ' . $result->get_error_message() );
 		}
 	}
 
