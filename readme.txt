@@ -1,5 +1,5 @@
 === FlavourSuite AI ===
-Contributors: flavoursuite
+Contributors: masrawy2025
 Tags: mcp, ai, agents, claude, woocommerce
 Requires at least: 6.9
 Tested up to: 7.0
@@ -50,7 +50,7 @@ Integrations are detected automatically: if WooCommerce is active its tools appe
 1. Install and activate the plugin (WordPress 6.9+, PHP 7.4+).
 2. Go to *Settings → FlavourSuite AI* and enable the MCP server.
 3. Create an Application Password for your user (*Users → Profile → Application Passwords*).
-4. Copy the connection snippet from the settings page into your MCP client (Claude Code, Claude Desktop, Cursor, …).
+4. Paste the Application Password into the snippet builder on the settings page — it produces a ready-to-use configuration for your MCP client (Claude Desktop, Claude Code, Cursor, VS Code, Codex, …). The token is computed in your browser and never stored.
 
 For example, with Claude Code: `claude mcp add --transport http flavoursuite https://example.com/wp-json/flavoursuite-ai/mcp`
 

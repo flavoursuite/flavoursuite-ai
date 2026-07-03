@@ -121,20 +121,24 @@ final class Settings {
 
 		$tools    = Mcp::tool_names();
 		$endpoint = rest_url( 'flavoursuite-ai/mcp' );
-		$snippet  = wp_json_encode(
+
+		// __AUTH__ is swapped client-side by the token generator below; the
+		// displayed default keeps a human-readable placeholder.
+		$snippet_template = (string) wp_json_encode(
 			array(
 				'mcpServers' => array(
 					'flavoursuite' => array(
 						'type'    => 'http',
 						'url'     => $endpoint,
 						'headers' => array(
-							'Authorization' => 'Basic <base64 of username:application-password>',
+							'Authorization' => '__AUTH__',
 						),
 					),
 				),
 			),
 			JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
 		);
+		$snippet          = str_replace( '__AUTH__', 'Basic <base64 of username:application-password>', $snippet_template );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'FlavourSuite AI', 'flavoursuite-ai' ); ?></h1>
@@ -199,9 +203,61 @@ final class Settings {
 				<code><?php echo esc_url( $endpoint ); ?></code>
 			</p>
 			<p>
-				<?php esc_html_e( 'Authenticate with an Application Password (create one under Users → Profile) via HTTP Basic auth. Example client configuration:', 'flavoursuite-ai' ); ?>
+				<?php esc_html_e( 'Agents authenticate with an Application Password (create one under Users → Profile → Application Passwords). Paste it below to build a ready-to-use connection snippet — the token is computed in your browser and never sent or saved anywhere.', 'flavoursuite-ai' ); ?>
 			</p>
-			<pre style="background:#f6f7f7;border:1px solid #dcdcde;padding:12px;overflow:auto;"><code><?php echo esc_html( $snippet ); ?></code></pre>
+			<p>
+				<label>
+					<?php esc_html_e( 'WordPress username', 'flavoursuite-ai' ); ?><br />
+					<input type="text" id="fs-token-user" class="regular-text" value="<?php echo esc_attr( wp_get_current_user()->user_login ); ?>" autocomplete="off" spellcheck="false" />
+				</label>
+			</p>
+			<p>
+				<label>
+					<?php esc_html_e( 'Application password', 'flavoursuite-ai' ); ?><br />
+					<input type="password" id="fs-token-pass" class="regular-text" autocomplete="off" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" />
+				</label>
+			</p>
+			<p>
+				<button type="button" id="fs-token-generate" class="button button-secondary"><?php esc_html_e( 'Build connection snippet', 'flavoursuite-ai' ); ?></button>
+				<span id="fs-token-error" style="color:#b32d2e;display:none;"><?php esc_html_e( 'Enter both the username and the application password.', 'flavoursuite-ai' ); ?></span>
+			</p>
+			<p id="fs-auth-line" style="display:none;">
+				<?php esc_html_e( 'Authorization header:', 'flavoursuite-ai' ); ?>
+				<code id="fs-auth-value"></code>
+			</p>
+			<pre style="background:#f6f7f7;border:1px solid #dcdcde;padding:12px;overflow:auto;"><code id="fs-snippet" data-template="<?php echo esc_attr( $snippet_template ); ?>"><?php echo esc_html( $snippet ); ?></code></pre>
+			<p class="description">
+				<?php
+				printf(
+					/* translators: %s: docs URL. */
+					esc_html__( 'Per-client setup guides (Claude, ChatGPT, Cursor, VS Code, Codex): %s', 'flavoursuite-ai' ),
+					'<a href="https://flavoursuite.github.io/docs/#connect" target="_blank" rel="noopener">flavoursuite.github.io/docs</a>'
+				);
+				?>
+			</p>
+			<?php
+			wp_print_inline_script_tag(
+				'(function () {
+					var btn = document.getElementById( "fs-token-generate" );
+					if ( ! btn ) { return; }
+					btn.addEventListener( "click", function () {
+						var user = document.getElementById( "fs-token-user" ).value.trim();
+						var pass = document.getElementById( "fs-token-pass" ).value.trim();
+						var err  = document.getElementById( "fs-token-error" );
+						if ( ! user || ! pass ) { err.style.display = ""; return; }
+						err.style.display = "none";
+						var bytes = new TextEncoder().encode( user + ":" + pass );
+						var bin = "";
+						bytes.forEach( function ( b ) { bin += String.fromCharCode( b ); } );
+						var auth = "Basic " + btoa( bin );
+						document.getElementById( "fs-auth-value" ).textContent = auth;
+						document.getElementById( "fs-auth-line" ).style.display = "";
+						var snippet = document.getElementById( "fs-snippet" );
+						snippet.textContent = snippet.getAttribute( "data-template" ).replace( "__AUTH__", auth );
+					} );
+				})();'
+			);
+			?>
 
 			<hr />
 
