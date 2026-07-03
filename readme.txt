@@ -54,6 +54,8 @@ Integrations are detected automatically: if WooCommerce is active its tools appe
 
 For example, with Claude Code: `claude mcp add --transport http flavoursuite https://example.com/wp-json/flavoursuite-ai/mcp`
 
+Full documentation — including per-client connection guides (Claude Code, Claude Desktop, Cursor, ChatGPT), the Approvals walkthrough, and troubleshooting: [flavoursuite.github.io/docs](https://flavoursuite.github.io/docs/)
+
 == Frequently Asked Questions ==
 
 = Is this safe to install on a production site? =
