@@ -30,6 +30,7 @@ final class Abilities {
 		self::register_site_overview();
 		self::register_list_recent_posts();
 		self::register_search_content();
+		self::register_site_policies();
 	}
 
 	/**
@@ -176,6 +177,47 @@ final class Abilities {
 		);
 	}
 
+	private static function register_site_policies(): void {
+		self::guard(
+			wp_register_ability(
+				'flavoursuite/site-policies',
+				array(
+					'label'               => __( 'Site policies', 'flavoursuite-ai' ),
+					'description'         => 'Returns this site\'s policy and info pages (privacy, terms, returns, shipping, FAQ, contact…) with their full text. Use it to answer pre-sale and trust questions instead of guessing.',
+					'category'            => 'flavoursuite',
+					'input_schema'        => array(
+						'type'       => 'object',
+						'properties' => array(
+							'kinds' => array(
+								'type'        => 'array',
+								'items'       => array( 'type' => 'string' ),
+								'description' => 'Restrict to these policy kinds, e.g. ["privacy","returns"]. Default: all found.',
+							),
+						),
+					),
+					'output_schema'       => array(
+						'type'       => 'object',
+						'properties' => array(
+							'policies' => array(
+								'type'  => 'array',
+								'items' => array( 'type' => 'object' ),
+							),
+						),
+					),
+					'permission_callback' => static fn ( $input = null ): bool => current_user_can( 'read' ),
+					'execute_callback'    => array( self::class, 'site_policies' ),
+					'meta'                => array(
+						'annotations' => array(
+							'readonly'   => true,
+							'idempotent' => true,
+						),
+					),
+				)
+			),
+			'flavoursuite/site-policies'
+		);
+	}
+
 	/* ---------------------------------------------------------------------
 	 * Execute callbacks — all read-only.
 	 * ------------------------------------------------------------------- */
@@ -272,6 +314,92 @@ final class Abilities {
 			'count'     => count( $items ),
 			'items'     => $items,
 		);
+	}
+
+	/**
+	 * Slug/title fragments that identify a policy page, keyed by kind.
+	 * First published match wins per kind.
+	 *
+	 * @return array<string, list<string>>
+	 */
+	private static function policy_patterns(): array {
+		return array(
+			'privacy'  => array( 'privacy' ),
+			'terms'    => array( 'terms', 'conditions' ),
+			'returns'  => array( 'refund', 'return' ),
+			'shipping' => array( 'shipping', 'delivery' ),
+			'faq'      => array( 'faq', 'frequently-asked' ),
+			'contact'  => array( 'contact' ),
+			'about'    => array( 'about' ),
+			'cookies'  => array( 'cookie' ),
+		);
+	}
+
+	/**
+	 * @param mixed $input Validated against input_schema by the Abilities API.
+	 */
+	public static function site_policies( $input = null ): array {
+		$input = is_array( $input ) ? $input : array();
+
+		$found = array();
+
+		// The privacy page is the one policy WordPress tracks explicitly.
+		$privacy_id = (int) get_option( 'wp_page_for_privacy_policy' );
+		if ( $privacy_id && 'publish' === get_post_status( $privacy_id ) ) {
+			$found['privacy'] = $privacy_id;
+		}
+
+		foreach ( get_pages( array( 'number' => 200 ) ) as $page ) {
+			$haystack = $page->post_name . ' ' . strtolower( $page->post_title );
+			foreach ( self::policy_patterns() as $kind => $fragments ) {
+				if ( isset( $found[ $kind ] ) ) {
+					continue;
+				}
+				foreach ( $fragments as $fragment ) {
+					if ( false !== strpos( $haystack, $fragment ) ) {
+						$found[ $kind ] = $page->ID;
+						break;
+					}
+				}
+			}
+		}
+
+		/**
+		 * Filters the detected policy pages before they are returned to agents.
+		 *
+		 * Integrations add vendor-configured pages here (e.g. WooCommerce's
+		 * terms and refund pages), overriding the slug heuristics.
+		 *
+		 * @param array<string, int> $found Page IDs keyed by policy kind.
+		 */
+		$found = (array) apply_filters( 'flavoursuite/ai/policy_pages', $found );
+
+		$kinds = array();
+		if ( ! empty( $input['kinds'] ) && is_array( $input['kinds'] ) ) {
+			$kinds = array_map( 'sanitize_key', $input['kinds'] );
+		}
+
+		$policies = array();
+		foreach ( $found as $kind => $page_id ) {
+			if ( $kinds && ! in_array( $kind, $kinds, true ) ) {
+				continue;
+			}
+			$page = get_post( (int) $page_id );
+			if ( ! $page || 'publish' !== $page->post_status ) {
+				continue;
+			}
+			$text       = wp_strip_all_tags( $page->post_content );
+			$policies[] = array(
+				'kind'      => (string) $kind,
+				'id'        => $page->ID,
+				'title'     => get_the_title( $page ),
+				'url'       => get_permalink( $page ),
+				'content'   => mb_substr( $text, 0, 6000 ),
+				'truncated' => mb_strlen( $text ) > 6000,
+			);
+		}
+
+		return array( 'policies' => $policies );
 	}
 
 	/**

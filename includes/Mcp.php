@@ -49,6 +49,7 @@ final class Mcp {
 			'flavoursuite/site-overview',
 			'flavoursuite/list-recent-posts',
 			'flavoursuite/search-content',
+			'flavoursuite/site-policies',
 		);
 
 		/**

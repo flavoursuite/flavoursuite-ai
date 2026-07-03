@@ -23,6 +23,28 @@ final class Integration implements IntegrationInterface {
 	public function register(): void {
 		add_action( 'wp_abilities_api_init', array( $this, 'register_abilities' ) );
 		add_filter( 'flavoursuite/ai/mcp_tools', array( $this, 'expose_tools' ) );
+		add_filter( 'flavoursuite/ai/policy_pages', array( $this, 'policy_pages' ) );
+	}
+
+	/**
+	 * Woo knows its terms and refund pages explicitly — more reliable than
+	 * the slug heuristics in the core site-policies ability.
+	 *
+	 * @param array<string, int> $found Page IDs keyed by policy kind.
+	 * @return array<string, int>
+	 */
+	public function policy_pages( array $found ): array {
+		$terms_id = (int) wc_terms_and_conditions_page_id();
+		if ( $terms_id ) {
+			$found['terms'] = $terms_id;
+		}
+
+		$refund_id = (int) get_option( 'woocommerce_refund_returns_page_id' );
+		if ( $refund_id ) {
+			$found['returns'] = $refund_id;
+		}
+
+		return $found;
 	}
 
 	/**

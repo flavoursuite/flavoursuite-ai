@@ -5,7 +5,7 @@
  * Description:       Make your WordPress site agent-ready: safely expose site data and actions to AI agents (Claude, ChatGPT, Cursor) via the Model Context Protocol.
  * Version:           0.1.0
  * Requires at least: 6.9
- * Requires PHP:      8.1
+ * Requires PHP:      7.4
  * Author:            FlavourSuite
  * Author URI:        https://flavoursuite.github.io
  * License:           GPL-2.0-or-later

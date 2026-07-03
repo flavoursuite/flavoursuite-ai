@@ -3,7 +3,7 @@ Contributors: flavoursuite
 Tags: mcp, ai, agents, claude, woocommerce
 Requires at least: 6.9
 Tested up to: 7.0
-Requires PHP: 8.1
+Requires PHP: 7.4
 Stable tag: 0.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -29,7 +29,9 @@ It is built on the WordPress core **Abilities API** (WordPress 6.9+) and the off
 * **Site overview** — WordPress/PHP versions, active plugins, content counts (administrators only).
 * **List recent posts** — recent published entries of any public post type.
 * **Search content** — full-text search across public content with snippets.
-* **WooCommerce store overview** — product and order counts by status, currency, WooCommerce version (shop managers only; no customer data). Registered automatically when WooCommerce is active.
+* **Site policies** — privacy, terms, returns, shipping, FAQ and contact pages with their text, so agents answer pre-sale and trust questions from your real policies.
+* **WooCommerce store overview** — product and order counts by status, currency, WooCommerce version (shop managers only; no customer data). Registered automatically when WooCommerce is active. WooCommerce also supplies its configured terms and refund pages to the site-policies tool.
+* **FluentCRM tools** — when FluentCRM 3.0+ is active, its own read-only CRM context, campaigns, and automations tools appear on this server (contact-level tools are deliberately excluded here; FluentCRM's dedicated MCP server carries the full set).
 
 = Works with your stack =
 
@@ -66,6 +68,10 @@ The Model Context Protocol is an open standard that lets AI assistants use exter
 
 Yes. The core site tools work on any WordPress site. WooCommerce tools appear only when WooCommerce is active.
 
+= Which FluentCRM versions are supported? =
+
+FluentCRM 3.0 or newer — that's where FluentCRM introduced its own abilities, which this plugin curates. With an older FluentCRM the CRM tools simply don't appear; nothing breaks.
+
 = Can agents modify my site? =
 
 Not in this version — every shipped tool is read-only. If future versions add write tools, they will be disabled by default and clearly marked.
@@ -75,7 +81,7 @@ Not in this version — every shipped tool is read-only. If future versions add 
 = 0.1.0 =
 * Initial release.
 * MCP server (Streamable HTTP) built on the core Abilities API and the official wordpress/mcp-adapter.
-* Tools: site overview, list recent posts, search content, WooCommerce store overview (auto-detected).
+* Tools: site overview, list recent posts, search content, site policies, WooCommerce store overview (auto-detected), FluentCRM 3.0+ tool curation (auto-detected).
 * Settings screen: master switch (off by default), per-tool toggles, connection snippet.
 * Audit log of tool calls (user, tool, status, duration — never arguments or results).
 
