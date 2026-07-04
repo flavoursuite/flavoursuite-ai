@@ -47,6 +47,12 @@ final class Lifecycle {
 		Settings::register();
 		Mcp::register();
 
+		// OAuth endpoints share the master switch: no MCP route, no issuer.
+		if ( Settings::is_enabled() ) {
+			OAuth\Server::register();
+			OAuth\Consent::register();
+		}
+
 		// Priority 20: every plugin has loaded, so vendor detection is reliable.
 		add_action( 'plugins_loaded', array( Integrations\IntegrationRegistry::class, 'boot' ), 20 );
 
