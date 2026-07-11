@@ -106,6 +106,11 @@ final class Mcp {
 	}
 
 	public static function adapter_missing_notice(): void {
+		// Only users who can act on it (reinstall the plugin).
+		if ( ! current_user_can( 'activate_plugins' ) ) {
+			return;
+		}
+
 		wp_admin_notice(
 			__( 'FlavourSuite AI: the MCP adapter library is not available; agent connectivity is disabled.', 'flavoursuite-ai' ),
 			array( 'type' => 'warning' )

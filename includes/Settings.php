@@ -17,9 +17,16 @@ final class Settings {
 
 	private const OPTION = 'flavoursuite_ai_settings';
 
+	/**
+	 * Hook suffix returned by add_options_page(); used to enqueue the
+	 * connection-snippet script on this screen only.
+	 */
+	private static string $page_hook = '';
+
 	public static function register(): void {
 		add_action( 'admin_menu', array( self::class, 'add_page' ) );
 		add_action( 'admin_init', array( self::class, 'register_setting' ) );
+		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_assets' ) );
 	}
 
 	public static function is_enabled(): bool {
@@ -63,12 +70,28 @@ final class Settings {
 	}
 
 	public static function add_page(): void {
-		add_options_page(
+		$hook = add_options_page(
 			__( 'FlavourSuite AI', 'flavoursuite-ai' ),
 			__( 'FlavourSuite AI', 'flavoursuite-ai' ),
 			'manage_options',
 			'flavoursuite-ai',
 			array( self::class, 'render_page' )
+		);
+
+		self::$page_hook = is_string( $hook ) ? $hook : '';
+	}
+
+	public static function enqueue_assets( string $hook_suffix ): void {
+		if ( '' === self::$page_hook || $hook_suffix !== self::$page_hook ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			'flavoursuite-ai-settings',
+			FLAVOURSUITE_AI_URL . 'assets/js/settings.js',
+			array(),
+			FLAVOURSUITE_AI_VERSION,
+			true
 		);
 	}
 
@@ -235,30 +258,6 @@ final class Settings {
 				);
 				?>
 			</p>
-			<?php
-			wp_print_inline_script_tag(
-				'(function () {
-					var btn = document.getElementById( "fs-token-generate" );
-					if ( ! btn ) { return; }
-					btn.addEventListener( "click", function () {
-						var user = document.getElementById( "fs-token-user" ).value.trim();
-						var pass = document.getElementById( "fs-token-pass" ).value.trim();
-						var err  = document.getElementById( "fs-token-error" );
-						if ( ! user || ! pass ) { err.style.display = ""; return; }
-						err.style.display = "none";
-						var bytes = new TextEncoder().encode( user + ":" + pass );
-						var bin = "";
-						bytes.forEach( function ( b ) { bin += String.fromCharCode( b ); } );
-						var auth = "Basic " + btoa( bin );
-						document.getElementById( "fs-auth-value" ).textContent = auth;
-						document.getElementById( "fs-auth-line" ).style.display = "";
-						var snippet = document.getElementById( "fs-snippet" );
-						snippet.textContent = snippet.getAttribute( "data-template" ).replace( "__AUTH__", auth );
-					} );
-				})();'
-			);
-			?>
-
 			<hr />
 
 			<h2><?php esc_html_e( 'Recent agent activity', 'flavoursuite-ai' ); ?></h2>

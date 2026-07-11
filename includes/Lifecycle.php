@@ -60,6 +60,11 @@ final class Lifecycle {
 	}
 
 	public static function requires_wp_69_notice(): void {
+		// Only users who can act on it (upgrade core / deactivate the plugin).
+		if ( ! current_user_can( 'activate_plugins' ) ) {
+			return;
+		}
+
 		wp_admin_notice(
 			__( 'FlavourSuite AI requires WordPress 6.9 or newer (Abilities API).', 'flavoursuite-ai' ),
 			array( 'type' => 'error' )

@@ -18,9 +18,16 @@ final class AdminPage {
 
 	public const SLUG = 'flavoursuite-approvals';
 
+	/**
+	 * Hook suffix returned by add_management_page(); used to enqueue the
+	 * page stylesheet on this screen only.
+	 */
+	private static string $page_hook = '';
+
 	public static function register(): void {
 		add_action( 'admin_menu', array( self::class, 'add_page' ) );
 		add_action( 'admin_init', array( self::class, 'handle_action' ) );
+		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_assets' ) );
 	}
 
 	public static function url(): string {
@@ -28,12 +35,27 @@ final class AdminPage {
 	}
 
 	public static function add_page(): void {
-		add_management_page(
+		$hook = add_management_page(
 			__( 'Agent Changes', 'flavoursuite-ai' ),
 			__( 'Agent Changes', 'flavoursuite-ai' ),
 			'manage_options',
 			self::SLUG,
 			array( self::class, 'render' )
+		);
+
+		self::$page_hook = is_string( $hook ) ? $hook : '';
+	}
+
+	public static function enqueue_assets( string $hook_suffix ): void {
+		if ( '' === self::$page_hook || $hook_suffix !== self::$page_hook ) {
+			return;
+		}
+
+		wp_enqueue_style(
+			'flavoursuite-ai-approvals',
+			FLAVOURSUITE_AI_URL . 'assets/css/approvals.css',
+			array(),
+			FLAVOURSUITE_AI_VERSION
 		);
 	}
 
@@ -125,7 +147,6 @@ final class AdminPage {
 		echo '<p>' . esc_html__( 'AI agents can only propose changes — nothing below touches your site until you approve it here. Applied changes can be rolled back.', 'flavoursuite-ai' ) . '</p>';
 
 		self::render_notice();
-		self::render_styles();
 
 		$pending = ChangeRequests::items( ChangeRequests::STATUS_PENDING );
 		echo '<h2>' . esc_html__( 'Pending review', 'flavoursuite-ai' ) . '</h2>';
@@ -171,27 +192,6 @@ final class AdminPage {
 				'dismissible' => true,
 			)
 		);
-	}
-
-	/**
-	 * Minimal styling for core's wp_text_diff() table — its rules live in
-	 * revisions.css, which only the revisions screen enqueues.
-	 */
-	private static function render_styles(): void {
-		echo '<style>
-			.fs-change { border: 1px solid #c3c4c7; background: #fff; margin: 16px 0; padding: 12px 16px; max-width: 960px; }
-			.fs-change table.diff { width: 100%; border-collapse: collapse; table-layout: fixed; }
-			.fs-change table.diff td { padding: 4px 8px; font-family: Consolas, Monaco, monospace; font-size: 12px; vertical-align: top; word-wrap: break-word; white-space: pre-wrap; }
-			.fs-change table.diff .diff-deletedline { background: #fdd; }
-			.fs-change table.diff .diff-addedline { background: #dfd; }
-			.fs-change table.diff .diff-deletedline del { background: #f99; text-decoration: none; }
-			.fs-change table.diff .diff-addedline ins { background: #9f9; text-decoration: none; }
-			.fs-change .fs-change-meta { color: #646970; margin: 0 0 8px; }
-			.fs-change .fs-status { font-weight: 600; text-transform: uppercase; font-size: 11px; padding: 2px 8px; border-radius: 3px; background: #f0f0f1; }
-			.fs-change .fs-status-applied { background: #d5e8d5; }
-			.fs-change .fs-status-rejected, .fs-change .fs-status-rolled_back { background: #f1d2d2; }
-			.fs-change form { display: inline-block; margin-right: 8px; }
-		</style>';
 	}
 
 	private static function render_request( array $request ): void {
