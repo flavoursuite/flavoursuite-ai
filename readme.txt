@@ -4,7 +4,7 @@ Tags: mcp, ai, agents, claude, woocommerce
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,6 +92,11 @@ Only through you. Agents can *propose* changes (Additional CSS, post/page conten
 2. Tools → Agent Changes: a pending agent proposal shown as a before/after diff with Approve & apply, Reject, and rollback for applied changes.
 
 == Changelog ==
+
+= 0.2.1 =
+* Proposed CSS is now validated with WordPress core's own Customizer CSS validation (the same checks as Appearance → Additional CSS), both when an agent proposes it and again before it is applied.
+* List change requests now only returns requests the current user authored or has the capability to decide, instead of all requests.
+* Updated the jetpack-autoloader library to 5.0.21.
 
 = 0.2.0 =
 * Approvals: agents propose, humans approve. New change-request flow with before/after diffs, approve/reject, and rollback under Tools → Agent Changes.

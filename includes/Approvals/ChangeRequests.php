@@ -85,6 +85,7 @@ final class ChangeRequests {
 			'summary'    => $post->post_title,
 			'payload'    => is_array( $payload ) ? $payload : array(),
 			'author'     => $post->post_author ? get_the_author_meta( 'user_login', $post->post_author ) : '',
+			'author_id'  => (int) $post->post_author,
 			'created'    => $post->post_date_gmt,
 			'decided_by' => (string) get_post_meta( $post->ID, '_fs_decided_by', true ),
 			'decided_at' => (string) get_post_meta( $post->ID, '_fs_decided_at', true ),

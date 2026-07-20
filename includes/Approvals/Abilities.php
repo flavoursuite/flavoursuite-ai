@@ -93,12 +93,22 @@ final class Abilities {
 					),
 					'permission_callback' => static fn ( $input = null ): bool => current_user_can( 'edit_posts' ),
 					'execute_callback'    => static function ( $input = null ): array {
-						$status = is_array( $input ) && isset( $input['status'] ) ? (string) $input['status'] : null;
-						$items  = array();
+						$status  = is_array( $input ) && isset( $input['status'] ) ? (string) $input['status'] : null;
+						$user_id = get_current_user_id();
+						$items   = array();
 						foreach ( ChangeRequests::items( $status ) as $item ) {
+							// Per-request visibility: only requests this user
+							// authored or could decide (edit_theme_options for
+							// CSS, edit_post on the target for content). An
+							// unattributed request (author_id 0) is never
+							// "mine", whoever is asking.
+							$mine = $user_id > 0 && (int) $item['author_id'] === $user_id;
+							if ( ! $mine && ! Appliers::current_user_can_decide( $item ) ) {
+								continue;
+							}
 							// Payloads stay server-side: they can be large and
 							// the agent already knows what it proposed.
-							unset( $item['payload'] );
+							unset( $item['payload'], $item['author_id'] );
 							$items[] = $item;
 						}
 						return array(
@@ -154,6 +164,14 @@ final class Abilities {
 						$before = wp_get_custom_css();
 						if ( $before === $after ) {
 							return new WP_Error( 'fs_no_change', 'The proposed CSS is identical to the current CSS — nothing to review.' );
+						}
+
+						// Core's Customizer validation (rejects markup etc.) —
+						// fail at propose time so the agent can fix it, not the
+						// human reviewer.
+						$validity = Appliers::validate_css( $after );
+						if ( is_wp_error( $validity ) ) {
+							return $validity;
 						}
 
 						// before_css is captured HERE, server-side, so apply-time

@@ -15,6 +15,7 @@
 
 namespace FlavourSuite\Ai\Approvals;
 
+use FlavourSuite\Ai\Log;
 use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
@@ -73,6 +74,66 @@ final class Appliers {
 	// ---------------------------------------------------------------- CSS.
 
 	/**
+	 * Load core's custom CSS setting class on its own.
+	 *
+	 * Core only requires this class from WP_Customize_Manager::__construct(),
+	 * which we must not run outside the Customizer: it unhooks wp_cron and the
+	 * core update check, and spins up the widget/nav-menu subsystems. The two
+	 * class files have no such side effects.
+	 */
+	private static function load_custom_css_setting(): bool {
+		if ( class_exists( 'WP_Customize_Custom_CSS_Setting' ) ) {
+			return true;
+		}
+
+		$parent = ABSPATH . WPINC . '/class-wp-customize-setting.php';
+		$child  = ABSPATH . WPINC . '/customize/class-wp-customize-custom-css-setting.php';
+		if ( ! is_readable( $parent ) || ! is_readable( $child ) ) {
+			return false;
+		}
+
+		require_once $parent;
+		require_once $child;
+
+		return class_exists( 'WP_Customize_Custom_CSS_Setting' );
+	}
+
+	/**
+	 * Validate CSS exactly as Appearance → Additional CSS does.
+	 *
+	 * wp_update_custom_css_post() stores without validating — the checks live
+	 * in the Customizer setting — so anything writing custom CSS outside the
+	 * Customizer has to invoke them itself. This rejects CSS that would break
+	 * out of the enclosing STYLE element, including the partial-closing-tag
+	 * forms core guards against.
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function validate_css( string $css ) {
+		if ( self::load_custom_css_setting() ) {
+			try {
+				// validate() never dereferences the manager, so we can skip
+				// constructing one; the id must carry a single stylesheet key.
+				$setting  = new \WP_Customize_Custom_CSS_Setting( null, 'custom_css[' . get_stylesheet() . ']' );
+				$validity = $setting->validate( $css );
+
+				return is_wp_error( $validity ) && $validity->has_errors() ? $validity : true;
+			} catch ( \Throwable $e ) {
+				// Core's setting API changed shape — fall through.
+				Log::debug( 'custom CSS validation via core setting failed: ' . $e->getMessage() );
+			}
+		}
+
+		// Reduced stand-in for a broken install: catches a real closing tag but
+		// not the trailing-partial forms core also rejects.
+		if ( preg_match( '#</style#i', $css ) ) {
+			return new WP_Error( 'illegal_markup', __( 'The CSS must not contain "</style".', 'flavoursuite-ai' ) );
+		}
+
+		return true;
+	}
+
+	/**
 	 * Payload: { stylesheet, before_css, after_css }.
 	 * before_css was captured server-side at proposal time, so an exact
 	 * comparison against wp_get_custom_css() is a reliable staleness check.
@@ -86,6 +147,13 @@ final class Appliers {
 
 		if ( wp_get_custom_css() !== (string) ( $payload['before_css'] ?? '' ) ) {
 			return new WP_Error( 'fs_stale', __( 'The Additional CSS changed since this was proposed. Reject it and ask the agent to propose again.', 'flavoursuite-ai' ) );
+		}
+
+		// Re-validated at apply time: the stored payload could predate the
+		// propose-time check (or a future format change).
+		$validity = self::validate_css( (string) ( $payload['after_css'] ?? '' ) );
+		if ( is_wp_error( $validity ) ) {
+			return $validity;
 		}
 
 		$result = wp_update_custom_css_post( (string) ( $payload['after_css'] ?? '' ) );
