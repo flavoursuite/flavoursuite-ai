@@ -55,7 +55,7 @@ Worth engaging upstream: influence plus credibility.
 | Easy MCP AI | 5,000+ | 242 | 2.0 / 2.1 | 60/min | "force draft" only |
 | WPVibe | 5,000+ | — | — | — | none |
 | StifLi Flex MCP | 1,000+ | 122+ | 2.1 + PKCE | — | undo + client-side confirm |
-| **FlavourSuite AI** | **0 at launch** | **9** | in progress | **none** | **full diff + approve + rollback** |
+| **FlavourSuite AI** | **0 at launch** | **9** | DCR + PKCE | 60/min | **full diff + approve + rollback** |
 
 Notes:
 
@@ -68,8 +68,9 @@ Notes:
 
 ### Honest assessment
 
-We are last to market, have 9 tools against 122–242, and lack two things every
-competitor ships (OAuth, rate limiting).
+We are last to market and have 9 tools against 122–242. The two capability gaps
+against every competitor — OAuth discovery and rate limiting — closed in 0.3.0;
+tool count is the remaining one, and is deliberately not the thing to fix.
 
 But **no competitor has a real pre-execution approval queue.** StifLi's undo is
 post-hoc; its "Ask User" is a client-side confirm inside the agent's own session.
@@ -84,27 +85,51 @@ tools daily. Compete on being the only safe way to run anyone's tools.
 
 ## Plan
 
+### Shipped in 0.3.0 (2026-07-27, not yet released)
+
+- **OAuth discovery.** `Server.php` already implemented the RFC 8414/9728
+  documents but served them only under the REST namespace, where no client can
+  find them. `OAuth/Discovery.php` now serves both from `/.well-known/`, which is
+  what actually unblocks the claude.ai and ChatGPT connectors. Covered by a
+  path-matching test including subdirectory installs and the RFC 8414
+  issuer-suffix form.
+- **Connected agents + revoke.** `Store.php` told users to "revoke unused clients
+  in FlavourSuite AI settings" and that screen did not exist. It does now, and
+  `find_token()` treats the client registration as source of truth so revocation
+  is immediate rather than waiting for token expiry.
+- **Rate limiting.** `RateLimit.php`, 60/min per user by default. The real driver
+  was not competitor parity: `/register` is unauthenticated by RFC 7591 and
+  `Store::MAX_CLIENTS` caps the registry at 50, so anyone could have filled it
+  and permanently denied new agents. Anonymous callers get a tighter per-IP
+  budget.
+- **Audit log CSV export.**
+- **Connection recipes for every major agent.** `ClientProfiles.php` — 11 recipes
+  across command line, editors, cloud connectors, GUI apps, and an `mcp-remote`
+  stdio bridge as the universal fallback. Keyed by *client*, never by model:
+  MCP is model-agnostic, so DeepSeek/Qwen/Kimi/GLM/Llama/OpenRouter all work
+  through whichever agent the user runs. All JSON templates are verified to parse
+  after substitution.
+
 ### Now — post-launch hygiene
 
 1. **Banner + icon.** `.wordpress-org/` has only two screenshots, so the public
    page renders a generated placeholder against five polished competitors.
    Cheapest available win on install rate.
-2. **Rotate the SVN password.** Credentials are never stored on disk; use
+2. **Refresh screenshot 1.** The settings screen gained the agent picker, rate
+   limit field, and connected-agents table in 0.3.0; the shipped PNG predates all
+   three.
+3. **Rotate the SVN password.** Credentials are never stored on disk; use
    `--no-auth-cache` on every commit.
-3. **Rate limiting.** Confirmed absent from `includes/`. It is the one security
-   claim competitors make that we cannot, and our entire pitch is safety.
 4. **Watch reviews and the support forum.** Competitors sit at 5★ on 4–7 reviews;
    at this sample size the first few reviews move the needle enormously.
 
-### Next — 0.3.0
+### Next
 
-5. **Finish OAuth.** `includes/OAuth/{Server,Consent,Store}.php` exist from the M0
-   commit. Application Passwords only reach desktop and CLI clients; without OAuth
-   we cannot be a ChatGPT or Claude *web* connector, which is where
-   non-developer users are. Table stakes, not differentiation — three competitors
-   already ship DCR + PKCE.
-6. **Audit log export (CSV).** We log but cannot export. Governance buyers need
-   it; small effort.
+5. **Connection tokens.** Named, per-agent, revocable static bearer tokens scoped
+   to the MCP route, replacing Application Passwords for header-based clients. An
+   application password grants everything its user can do across the whole REST
+   API; a connection token would not. Also the prerequisite for per-agent tool
+   allowlists and expiry.
 
 ### Strategic — 0.4.0+
 

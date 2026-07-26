@@ -62,6 +62,56 @@ final class Store {
 		return is_array( $clients ) ? $clients : array();
 	}
 
+	/**
+	 * Revokes a client: the registration itself plus every token ever issued
+	 * to it, so access ends on the next request rather than at token expiry.
+	 *
+	 * @return bool False when the client was already gone.
+	 */
+	public static function delete_client( string $client_id ): bool {
+		$clients = self::clients();
+		if ( ! isset( $clients[ $client_id ] ) ) {
+			return false;
+		}
+
+		unset( $clients[ $client_id ] );
+		update_option( self::CLIENTS_OPTION, $clients, false );
+
+		$tokens  = self::tokens();
+		$revoked = false;
+		foreach ( $tokens as $hash => $row ) {
+			if ( isset( $row['client'] ) && $row['client'] === $client_id ) {
+				unset( $tokens[ $hash ] );
+				$revoked = true;
+			}
+		}
+		if ( $revoked ) {
+			update_option( self::TOKENS_OPTION, $tokens, false );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Live access tokens for a client — lets the settings screen distinguish a
+	 * genuinely connected agent from an abandoned registration.
+	 */
+	public static function active_token_count( string $client_id ): int {
+		$now   = time();
+		$count = 0;
+
+		foreach ( self::tokens() as $row ) {
+			if ( 'access' === ( $row['type'] ?? '' )
+				&& ( $row['client'] ?? '' ) === $client_id
+				&& ( $row['exp'] ?? 0 ) >= $now
+			) {
+				++$count;
+			}
+		}
+
+		return $count;
+	}
+
 	// -------------------------------------------------- Authorization codes.
 
 	/**
@@ -136,6 +186,12 @@ final class Store {
 		$row    = $tokens[ self::hash( $token ) ] ?? null;
 
 		if ( ! is_array( $row ) || $row['type'] !== $type || $row['exp'] < time() ) {
+			return null;
+		}
+
+		// A token outlives its client only if something went wrong; treat the
+		// client registration as the source of truth so revocation is absolute.
+		if ( null === self::get_client( (string) ( $row['client'] ?? '' ) ) ) {
 			return null;
 		}
 

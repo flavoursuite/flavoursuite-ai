@@ -16,7 +16,7 @@ final class Lifecycle {
 	 * deferred to plugins_loaded so nothing heavy runs at file load.
 	 */
 	public static function boot( string $main_file ): void {
-		define( 'FLAVOURSUITE_AI_VERSION', '0.2.1' );
+		define( 'FLAVOURSUITE_AI_VERSION', '0.3.0' );
 		define( 'FLAVOURSUITE_AI_DIR', plugin_dir_path( $main_file ) );
 		define( 'FLAVOURSUITE_AI_URL', plugin_dir_url( $main_file ) );
 
@@ -45,12 +45,17 @@ final class Lifecycle {
 		Approvals\Abilities::register();
 		Approvals\AdminPage::register();
 		Settings::register();
+		// Outside the master switch: the trail stays exportable after the
+		// server is turned off, which is when an audit is most likely.
+		AuditLog::register();
 		Mcp::register();
 
 		// OAuth endpoints share the master switch: no MCP route, no issuer.
 		if ( Settings::is_enabled() ) {
 			OAuth\Server::register();
 			OAuth\Consent::register();
+			OAuth\Discovery::register();
+			RateLimit::register();
 		}
 
 		// Priority 20: every plugin has loaded, so vendor detection is reliable.

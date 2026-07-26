@@ -17,6 +17,8 @@ final class Settings {
 
 	private const OPTION = 'flavoursuite_ai_settings';
 
+	private const REVOKE_ACTION = 'flavoursuite_ai_revoke_client';
+
 	/**
 	 * Hook suffix returned by add_options_page(); used to enqueue the
 	 * connection-snippet script on this screen only.
@@ -27,11 +29,50 @@ final class Settings {
 		add_action( 'admin_menu', array( self::class, 'add_page' ) );
 		add_action( 'admin_init', array( self::class, 'register_setting' ) );
 		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_assets' ) );
+		add_action( 'admin_post_' . self::REVOKE_ACTION, array( self::class, 'handle_revoke' ) );
 	}
 
 	public static function is_enabled(): bool {
 		$settings = self::get();
 		return ! empty( $settings['enabled'] );
+	}
+
+	/**
+	 * Per-minute request budget for authenticated MCP calls; 0 disables the
+	 * limiter entirely.
+	 */
+	public static function rate_limit(): int {
+		$settings = self::get();
+		return isset( $settings['rate_limit'] )
+			? max( 0, (int) $settings['rate_limit'] )
+			: RateLimit::DEFAULT_LIMIT;
+	}
+
+	/**
+	 * Revokes an OAuth client registration and every token issued to it.
+	 */
+	public static function handle_revoke(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				esc_html__( 'You are not allowed to revoke agent access.', 'flavoursuite-ai' ),
+				'',
+				array( 'response' => 403 )
+			);
+		}
+
+		check_admin_referer( self::REVOKE_ACTION );
+
+		$client_id = isset( $_POST['client_id'] ) ? sanitize_text_field( wp_unslash( $_POST['client_id'] ) ) : '';
+		$revoked   = '' !== $client_id && OAuth\Store::delete_client( $client_id );
+
+		wp_safe_redirect(
+			add_query_arg(
+				'fs-revoked',
+				$revoked ? '1' : '0',
+				admin_url( 'options-general.php?page=flavoursuite-ai' )
+			)
+		);
+		exit;
 	}
 
 	/**
@@ -118,8 +159,13 @@ final class Settings {
 		$existing = self::get();
 
 		$clean = array(
-			'enabled' => empty( $input['enabled'] ) ? 0 : 1,
-			'tools'   => array(),
+			'enabled'    => empty( $input['enabled'] ) ? 0 : 1,
+			// Capped rather than unbounded: a typo of 60000 would make the
+			// limiter useless while looking configured.
+			'rate_limit' => isset( $input['rate_limit'] )
+				? max( 0, min( 6000, (int) $input['rate_limit'] ) )
+				: self::rate_limit(),
+			'tools'      => array(),
 		);
 
 		if ( isset( $existing['tools'] ) && is_array( $existing['tools'] ) ) {
@@ -145,23 +191,9 @@ final class Settings {
 		$tools    = Mcp::tool_names();
 		$endpoint = rest_url( 'flavoursuite-ai/mcp' );
 
-		// __AUTH__ is swapped client-side by the token generator below; the
-		// displayed default keeps a human-readable placeholder.
-		$snippet_template = (string) wp_json_encode(
-			array(
-				'mcpServers' => array(
-					'flavoursuite' => array(
-						'type'    => 'http',
-						'url'     => $endpoint,
-						'headers' => array(
-							'Authorization' => '__AUTH__',
-						),
-					),
-				),
-			),
-			JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
-		);
-		$snippet          = str_replace( '__AUTH__', 'Basic <base64 of username:application-password>', $snippet_template );
+		// Recipes are handed to the browser as data; __URL__ and __AUTH__ are
+		// substituted there so the credential never round-trips to the server.
+		$profiles = ClientProfiles::all();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'FlavourSuite AI', 'flavoursuite-ai' ); ?></h1>
@@ -211,6 +243,20 @@ final class Settings {
 							</p>
 						</td>
 					</tr>
+					<tr>
+						<th scope="row">
+							<label for="fs-rate-limit"><?php esc_html_e( 'Rate limit', 'flavoursuite-ai' ); ?></label>
+						</th>
+						<td>
+							<input type="number" id="fs-rate-limit" class="small-text" min="0" max="6000" step="1"
+								name="<?php echo esc_attr( self::OPTION ); ?>[rate_limit]"
+								value="<?php echo esc_attr( (string) self::rate_limit() ); ?>" />
+							<?php esc_html_e( 'requests per minute, per user', 'flavoursuite-ai' ); ?>
+							<p class="description">
+								<?php esc_html_e( 'Caps how fast a single agent can call tools; a runaway loop gets a 429 instead of exhausting the server. Set to 0 to disable. Unauthenticated OAuth requests are always limited more tightly, per IP.', 'flavoursuite-ai' ); ?>
+							</p>
+						</td>
+					</tr>
 				</table>
 				<?php submit_button(); ?>
 			</form>
@@ -226,38 +272,67 @@ final class Settings {
 				<code><?php echo esc_url( $endpoint ); ?></code>
 			</p>
 			<p>
-				<?php esc_html_e( 'Agents authenticate with an Application Password (create one under Users → Profile → Application Passwords). Paste it below to build a ready-to-use connection snippet — the token is computed in your browser and never sent or saved anywhere.', 'flavoursuite-ai' ); ?>
+				<?php esc_html_e( 'Pick your agent and copy the recipe. Which model it runs — Claude, GPT, Gemini, DeepSeek, Qwen, Kimi, GLM, Llama, or anything through OpenRouter — makes no difference; MCP is the same protocol either way.', 'flavoursuite-ai' ); ?>
 			</p>
 			<p>
-				<label>
-					<?php esc_html_e( 'WordPress username', 'flavoursuite-ai' ); ?><br />
-					<input type="text" id="fs-token-user" class="regular-text" value="<?php echo esc_attr( wp_get_current_user()->user_login ); ?>" autocomplete="off" spellcheck="false" />
-				</label>
+				<label for="fs-client"><strong><?php esc_html_e( 'Agent', 'flavoursuite-ai' ); ?></strong></label><br />
+				<select id="fs-client" class="regular-text" data-endpoint="<?php echo esc_attr( $endpoint ); ?>" data-profiles="<?php echo esc_attr( (string) wp_json_encode( $profiles ) ); ?>">
+					<?php $group = ''; ?>
+					<?php foreach ( $profiles as $profile ) : ?>
+						<?php if ( $profile['group'] !== $group ) : ?>
+							<?php echo '' === $group ? '' : '</optgroup>'; ?>
+							<optgroup label="<?php echo esc_attr( $profile['group'] ); ?>">
+							<?php $group = $profile['group']; ?>
+						<?php endif; ?>
+						<option value="<?php echo esc_attr( $profile['id'] ); ?>"><?php echo esc_html( $profile['label'] ); ?></option>
+					<?php endforeach; ?>
+					<?php echo '' === $group ? '' : '</optgroup>'; ?>
+				</select>
 			</p>
-			<p>
-				<label>
-					<?php esc_html_e( 'Application password', 'flavoursuite-ai' ); ?><br />
-					<input type="password" id="fs-token-pass" class="regular-text" autocomplete="off" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" />
-				</label>
+
+			<p id="fs-client-note" class="description"></p>
+
+			<div id="fs-credentials">
+				<p>
+					<?php esc_html_e( 'Agents authenticate as a WordPress user with an Application Password (create one under Users → Profile → Application Passwords). It is turned into a header in your browser and never sent or saved anywhere.', 'flavoursuite-ai' ); ?>
+				</p>
+				<p>
+					<label>
+						<?php esc_html_e( 'WordPress username', 'flavoursuite-ai' ); ?><br />
+						<input type="text" id="fs-token-user" class="regular-text" value="<?php echo esc_attr( wp_get_current_user()->user_login ); ?>" autocomplete="off" spellcheck="false" />
+					</label>
+				</p>
+				<p>
+					<label>
+						<?php esc_html_e( 'Application password', 'flavoursuite-ai' ); ?><br />
+						<input type="password" id="fs-token-pass" class="regular-text" autocomplete="off" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" />
+					</label>
+				</p>
+				<p>
+					<button type="button" id="fs-token-generate" class="button button-secondary"><?php esc_html_e( 'Build connection recipe', 'flavoursuite-ai' ); ?></button>
+					<span id="fs-token-error" style="color:#b32d2e;display:none;"><?php esc_html_e( 'Enter both the username and the application password.', 'flavoursuite-ai' ); ?></span>
+				</p>
+			</div>
+
+			<p id="fs-file-line" style="display:none;">
+				<?php esc_html_e( 'Save as:', 'flavoursuite-ai' ); ?>
+				<code id="fs-file-value"></code>
 			</p>
-			<p>
-				<button type="button" id="fs-token-generate" class="button button-secondary"><?php esc_html_e( 'Build connection snippet', 'flavoursuite-ai' ); ?></button>
-				<span id="fs-token-error" style="color:#b32d2e;display:none;"><?php esc_html_e( 'Enter both the username and the application password.', 'flavoursuite-ai' ); ?></span>
-			</p>
-			<p id="fs-auth-line" style="display:none;">
-				<?php esc_html_e( 'Authorization header:', 'flavoursuite-ai' ); ?>
-				<code id="fs-auth-value"></code>
-			</p>
-			<pre style="background:#f6f7f7;border:1px solid #dcdcde;padding:12px;overflow:auto;"><code id="fs-snippet" data-template="<?php echo esc_attr( $snippet_template ); ?>"><?php echo esc_html( $snippet ); ?></code></pre>
+			<pre style="background:#f6f7f7;border:1px solid #dcdcde;padding:12px;overflow:auto;"><code id="fs-snippet"></code></pre>
 			<p class="description">
 				<?php
 				printf(
 					/* translators: %s: docs URL. */
-					esc_html__( 'Per-client setup guides (Claude, ChatGPT, Cursor, VS Code, Codex): %s', 'flavoursuite-ai' ),
+					esc_html__( 'Full per-client walkthroughs and troubleshooting: %s', 'flavoursuite-ai' ),
 					'<a href="https://flavoursuite.github.io/docs/#connect" target="_blank" rel="noopener">flavoursuite.github.io/docs</a>'
 				);
 				?>
 			</p>
+			<hr />
+
+			<h2><?php esc_html_e( 'Connected agents', 'flavoursuite-ai' ); ?></h2>
+			<?php self::render_connected_agents(); ?>
+
 			<hr />
 
 			<h2><?php esc_html_e( 'Recent agent activity', 'flavoursuite-ai' ); ?></h2>
@@ -265,7 +340,101 @@ final class Settings {
 				<?php esc_html_e( 'The last tool calls made through the MCP server. Arguments and results are never stored.', 'flavoursuite-ai' ); ?>
 			</p>
 			<?php AuditLog::render_table(); ?>
+			<p>
+				<a href="<?php echo esc_url( AuditLog::export_url() ); ?>" class="button button-secondary">
+					<?php esc_html_e( 'Export audit log (CSV)', 'flavoursuite-ai' ); ?>
+				</a>
+			</p>
 		</div>
+		<?php
+	}
+
+	/**
+	 * OAuth clients registered against this site, with a revoke action.
+	 *
+	 * Registration is public by RFC 7591 — any agent may register itself — so
+	 * this table is also how an administrator notices a registration they did
+	 * not initiate, and ends it.
+	 */
+	private static function render_connected_agents(): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only flag from our own redirect.
+		if ( isset( $_GET['fs-revoked'] ) ) {
+			$ok = '1' === sanitize_key( wp_unslash( $_GET['fs-revoked'] ) );
+			printf(
+				'<div class="notice notice-%1$s inline"><p>%2$s</p></div>',
+				$ok ? 'success' : 'warning',
+				esc_html(
+					$ok
+						? __( 'Agent access revoked.', 'flavoursuite-ai' )
+						: __( 'That agent had already been revoked.', 'flavoursuite-ai' )
+				)
+			);
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$clients = OAuth\Store::clients();
+
+		if ( array() === $clients ) {
+			echo '<p><em>' . esc_html__( 'No agents have connected over OAuth yet. Agents using an Application Password authenticate as your WordPress user and are not listed here — revoke those under Users → Profile.', 'flavoursuite-ai' ) . '</em></p>';
+			return;
+		}
+
+		uasort(
+			$clients,
+			static function ( array $a, array $b ): int {
+				return (int) ( $b['created'] ?? 0 ) <=> (int) ( $a['created'] ?? 0 );
+			}
+		);
+		?>
+		<table class="widefat striped" style="max-width:760px;">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Agent', 'flavoursuite-ai' ); ?></th>
+					<th><?php esc_html_e( 'Registered', 'flavoursuite-ai' ); ?></th>
+					<th><?php esc_html_e( 'Status', 'flavoursuite-ai' ); ?></th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $clients as $client ) : ?>
+					<?php $live = OAuth\Store::active_token_count( (string) $client['client_id'] ); ?>
+					<tr>
+						<td><strong><?php echo esc_html( (string) $client['name'] ); ?></strong></td>
+						<td>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %s: human time diff, e.g. "5 mins". */
+									__( '%s ago', 'flavoursuite-ai' ),
+									human_time_diff( (int) $client['created'] )
+								)
+							);
+							?>
+						</td>
+						<td>
+							<?php if ( $live > 0 ) : ?>
+								<span style="color:#00701c;">&#9679;</span> <?php esc_html_e( 'Connected', 'flavoursuite-ai' ); ?>
+							<?php else : ?>
+								<span style="color:#8c8f94;">&#9675;</span> <?php esc_html_e( 'No active token', 'flavoursuite-ai' ); ?>
+							<?php endif; ?>
+						</td>
+						<td style="text-align:right;">
+							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+								<?php wp_nonce_field( self::REVOKE_ACTION ); ?>
+								<input type="hidden" name="action" value="<?php echo esc_attr( self::REVOKE_ACTION ); ?>" />
+								<input type="hidden" name="client_id" value="<?php echo esc_attr( (string) $client['client_id'] ); ?>" />
+								<button type="submit" class="button button-small button-link-delete">
+									<?php esc_html_e( 'Revoke', 'flavoursuite-ai' ); ?>
+								</button>
+							</form>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<p class="description">
+			<?php esc_html_e( 'Revoking removes the registration and immediately invalidates every token issued to that agent — it must go through the consent screen again to reconnect.', 'flavoursuite-ai' ); ?>
+		</p>
 		<?php
 	}
 }

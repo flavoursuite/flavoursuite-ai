@@ -16,8 +16,78 @@ defined( 'ABSPATH' ) || exit;
 
 final class AuditLog implements McpObservabilityHandlerInterface {
 
-	private const OPTION      = 'flavoursuite_ai_audit_log';
-	private const MAX_ENTRIES = 100;
+	private const OPTION        = 'flavoursuite_ai_audit_log';
+	private const MAX_ENTRIES   = 100;
+	private const EXPORT_ACTION = 'flavoursuite_ai_export_audit';
+
+	public static function register(): void {
+		add_action( 'admin_post_' . self::EXPORT_ACTION, array( self::class, 'handle_export' ) );
+	}
+
+	/**
+	 * Nonce-signed download URL for the settings screen.
+	 */
+	public static function export_url(): string {
+		return wp_nonce_url(
+			add_query_arg( 'action', self::EXPORT_ACTION, admin_url( 'admin-post.php' ) ),
+			self::EXPORT_ACTION
+		);
+	}
+
+	/**
+	 * Streams the audit trail as CSV.
+	 *
+	 * Built as a string rather than through fputcsv() on php://output: the
+	 * file-handle functions trip WP.org's Plugin Check, and the payload is
+	 * bounded at MAX_ENTRIES rows so there is nothing to stream.
+	 */
+	public static function handle_export(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				esc_html__( 'You are not allowed to export the audit log.', 'flavoursuite-ai' ),
+				'',
+				array( 'response' => 403 )
+			);
+		}
+
+		check_admin_referer( self::EXPORT_ACTION );
+
+		$rows = array( array( 'time_utc', 'user', 'tool', 'status', 'duration_ms' ) );
+
+		foreach ( self::entries() as $entry ) {
+			$rows[] = array(
+				gmdate( 'c', (int) $entry['time'] ),
+				(string) $entry['user'],
+				(string) $entry['tool'],
+				(string) $entry['status'],
+				null !== $entry['duration_ms'] ? (string) $entry['duration_ms'] : '',
+			);
+		}
+
+		$csv = '';
+		foreach ( $rows as $row ) {
+			$csv .= implode( ',', array_map( array( self::class, 'csv_field' ), $row ) ) . "\r\n";
+		}
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header(
+			'Content-Disposition: attachment; filename=flavoursuite-audit-'
+			. gmdate( 'Y-m-d' ) . '.csv'
+		);
+
+		echo $csv; // phpcs:ignore WordPress.Security.EscapingOutput.OutputNotEscaped -- CSV body, quoted by csv_field(); escaping for HTML would corrupt it.
+		exit;
+	}
+
+	/**
+	 * RFC 4180 quoting. Always quoting is simpler than deciding when to, and
+	 * the leading-quote form also stops spreadsheets treating a value starting
+	 * with =, +, - or @ as a formula.
+	 */
+	private static function csv_field( string $value ): string {
+		return '"' . str_replace( '"', '""', $value ) . '"';
+	}
 
 	/**
 	 * Called by the adapter for every MCP event; we persist tool calls only —
