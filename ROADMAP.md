@@ -1,0 +1,174 @@
+# FlavourSuite AI — Roadmap & Market Position
+
+**Last reviewed:** 2026-07-27 · **Current release:** 0.2.1 · **Status:** live on WordPress.org
+
+> Working document. Not shipped to users — excluded via `.distignore`.
+
+---
+
+## Where we stand
+
+Approved by the WordPress.org plugins team on 2026-07-27 after a three-week review
+(first submission 2026-07-05). Published to SVN as r3623835 (trunk + assets) and
+r3623836 (`tags/0.2.1`). Live at <https://wordpress.org/plugins/flavoursuite-ai>.
+
+Nine tools, Application Password auth, and an approvals flow (propose → diff →
+approve/reject → rollback) with staleness protection.
+
+---
+
+## The ecosystem: what WordPress core actually shipped
+
+Researched 2026-07-27 from make.wordpress.org/ai and wordpress.org/plugins.
+
+- **Abilities API is in core as of WordPress 6.9.** Our architectural bet is
+  validated — this is the standard the project chose, and three competing plugins
+  now require 6.9 for the same reason.
+- **`wordpress/mcp-adapter` is at v0.5.0** (released 2026-04-14; 255k installs,
+  887 GitHub stars). We vendor exactly this, so we are current. The AI team has
+  "multiple improvements awaiting release" and is moving to a weekly/biweekly
+  cadence — **we need a standing habit of pulling adapter updates.**
+- **The official AI plugin** (40,000+ installs, 4.6★, maintained by wordpress.org;
+  1.2.0 shipped 2026-07-14) is *editor-side* AI: alt text, title generation,
+  summarisation, comment moderation, type-ahead. It **does not include an MCP
+  server** — its docs list MCP as "coming soon."
+- **WordPress 7.1's AI focus** is embeddings and the PHP AI Client, not a core MCP
+  endpoint.
+
+**Verdict: core is not building our product.** Core is making *WordPress use AI*;
+we make *AI use WordPress*. The two are orthogonal today.
+
+**The opening.** The AI team's own status reads: *"Abilities API: read-oriented
+foundations established; management capabilities under discussion for future
+phases."* Core has shipped read abilities and has **not yet decided how write
+abilities should be governed** — which is exactly what `includes/Approvals/`
+already does. We are ahead of core on the question core is currently stuck on.
+Worth engaging upstream: influence plus credibility.
+
+---
+
+## Competitive landscape (as of 2026-07-27)
+
+| Plugin | Installs | Tools | OAuth | Rate limit | Approval gate |
+| --- | ---: | ---: | --- | --- | --- |
+| Royal MCP | 9,000+ | 129 | DCR + PKCE | 60/min | none |
+| Easy MCP AI | 5,000+ | 242 | 2.0 / 2.1 | 60/min | "force draft" only |
+| WPVibe | 5,000+ | — | — | — | none |
+| StifLi Flex MCP | 1,000+ | 122+ | 2.1 + PKCE | — | undo + client-side confirm |
+| **FlavourSuite AI** | **0 at launch** | **9** | in progress | **none** | **full diff + approve + rollback** |
+
+Notes:
+
+- **Royal MCP** launched 2026-01-14, is updated near-daily, free with no pro tier.
+  Strongest all-round competitor.
+- **Easy MCP AI** already auto-discovers plugin Abilities on 6.9+ — it *exposes*
+  them without governing them.
+- **StifLi Flex MCP** monetises via add-ons (Copilot, Chat Agent, Automations),
+  supports WP 5.9+, and is the closest to our safety positioning.
+
+### Honest assessment
+
+We are last to market, have 9 tools against 122–242, and lack two things every
+competitor ships (OAuth, rate limiting).
+
+But **no competitor has a real pre-execution approval queue.** StifLi's undo is
+post-hoc; its "Ask User" is a client-side confirm inside the agent's own session.
+Easy MCP's "force draft" is one blunt setting. Our model — a proposal that
+persists in wp-admin, reviewed by *a different human than the one driving the
+agent*, with staleness refusal — is unique. That is the moat.
+
+**Do not compete on tool count.** That race is unwinnable against a plugin adding
+tools daily. Compete on being the only safe way to run anyone's tools.
+
+---
+
+## Plan
+
+### Now — post-launch hygiene
+
+1. **Banner + icon.** `.wordpress-org/` has only two screenshots, so the public
+   page renders a generated placeholder against five polished competitors.
+   Cheapest available win on install rate.
+2. **Rotate the SVN password.** Credentials are never stored on disk; use
+   `--no-auth-cache` on every commit.
+3. **Rate limiting.** Confirmed absent from `includes/`. It is the one security
+   claim competitors make that we cannot, and our entire pitch is safety.
+4. **Watch reviews and the support forum.** Competitors sit at 5★ on 4–7 reviews;
+   at this sample size the first few reviews move the needle enormously.
+
+### Next — 0.3.0
+
+5. **Finish OAuth.** `includes/OAuth/{Server,Consent,Store}.php` exist from the M0
+   commit. Application Passwords only reach desktop and CLI clients; without OAuth
+   we cannot be a ChatGPT or Claude *web* connector, which is where
+   non-developer users are. Table stakes, not differentiation — three competitors
+   already ship DCR + PKCE.
+6. **Audit log export (CSV).** We log but cannot export. Governance buyers need
+   it; small effort.
+
+### Strategic — 0.4.0+
+
+7. **Become the governance layer for any registered ability.** Rather than
+   hand-writing tools 10 through 100, let admins opt any registered ability
+   (official AI plugin, WooCommerce, ACF, FluentCRM, anything) into our server,
+   and **automatically route every write-classified ability through the approval
+   queue.** `includes/Integrations/Contracts/` is already built for pluggability;
+   this is its generalisation.
+
+   This converts a competitor's tool count from a threat into our addressable
+   surface: they add tools, we govern them.
+
+---
+
+## Feature backlog
+
+Ranked by unmet need × fit with the approvals moat.
+
+- **Multi-user approvals with notification** — editor's agent proposes, admin is
+  pinged by email/Slack, approves in wp-admin. No competitor models *two
+  different humans* at all.
+- **Per-agent tokens** with tool allowlists and expiry, distinct from per-user.
+  Today an Application Password inherits everything its user can do.
+- **Rejection reasons fed back to the agent** — `list-change-requests` exists;
+  adding *why* closes the loop so agents retry correctly. Nobody does this.
+- **WooCommerce write proposals** (price, stock, description) with diffs. The
+  highest-stakes writes on any site, and Royal exposes 26 Woo tools with no gate.
+- **Block-level content proposals** instead of whole-post replacement — better
+  diffs, far fewer staleness refusals.
+- **Policy rules** — "auto-approve CSS under 50 lines, always queue post content,
+  never allow user changes."
+- **Bulk approvals** for high-volume sites.
+
+---
+
+## Monetisation
+
+Royal and Easy are both free with no pro tier, so "free and comprehensive" is a
+race to zero. StifLi's add-on model is the sane precedent.
+
+Our natural paid tier is the governance stack: multi-user approvals, Slack and
+webhooks, audit export, multisite, policy rules. Agencies and anyone with a
+compliance requirement pay for that. Hobbyists never will — and they are not the
+buyer.
+
+---
+
+## Open questions
+
+- **Is `Requires at least: 6.9` too aggressive?** It excludes a large installed
+  base; StifLi supports 5.9+ and degrades gracefully. Investigate soft-requiring
+  the Abilities API instead of hard-requiring 6.9 — but get real adoption numbers
+  before spending effort.
+- **Should the approvals pattern be proposed upstream** to the WordPress AI team
+  while management abilities are still under discussion?
+
+---
+
+## Sources
+
+- <https://make.wordpress.org/ai/>
+- <https://wordpress.org/plugins/ai/>
+- <https://wordpress.org/plugins/royal-mcp/>
+- <https://wordpress.org/plugins/easy-mcp-ai/>
+- <https://wordpress.org/plugins/stifli-flex-mcp/>
+- <https://packagist.org/packages/wordpress/mcp-adapter>
