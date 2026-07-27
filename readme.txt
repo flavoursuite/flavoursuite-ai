@@ -1,6 +1,6 @@
 === FlavourSuite AI ===
 Contributors: masrawy2025
-Tags: mcp, ai, agents, claude, woocommerce
+Tags: mcp, ai, agents, claude, chatgpt
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4

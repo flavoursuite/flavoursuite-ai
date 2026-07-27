@@ -158,6 +158,42 @@ after the rsync and `svn rm` them before committing.
 wp.org serves users whatever `tags/<Stable tag>/` contains, so the tag directory
 name must equal the readme `Stable tag:` value exactly.
 
+### Changing readme metadata after release
+
+**The plugin page is built from `tags/<Stable tag>/readme.txt`, not trunk.** Per the
+handbook: *"If the Stable Tag is 1.2.3 and /tags/1.2.3/ exists, then nothing in
+trunk will be read any further for parsing by any part of the system."* Editing
+only trunk changes nothing on the public page.
+
+So a description, FAQ or tag fix needs the readme updated in **both** places. This
+does not trigger an update for existing users — the version users see comes from
+the `Version:` header in the plugin PHP file, not from the readme.
+
+**Tags are capped at 5** ("1 to 5 comma separated terms"), so adding one always
+means dropping one. Competition, measured 2026-07-27 via
+`api.wordpress.org/plugins/info/1.2/?action=query_plugins&request[tag]=…`:
+
+| Tag | Competing plugins |
+| --- | ---: |
+| agents | 30 |
+| ai-agent | 45 |
+| claude | 79 |
+| mcp | 89 |
+| gpt | 89 |
+| chatgpt | 281 |
+| openai | 296 |
+| automation | 550 |
+| ai | 1,776 |
+| woocommerce | 7,618 |
+
+Current set is `mcp, ai, agents, claude, chatgpt`. `woocommerce` was dropped for
+`chatgpt`: 7,618 competitors is unwinnable for a new plugin, and people browsing it
+want store features, not an MCP server. WooCommerce support is still discoverable —
+it is named in the short description, the Description body and an FAQ, all of which
+wp.org indexes. `openai` was rejected as inaccurate: the plugin makes no OpenAI API
+calls and holds no keys. ChatGPT is supported as an MCP *client*, which is what the
+tag claims.
+
 ---
 
 ## Dev environment notes
