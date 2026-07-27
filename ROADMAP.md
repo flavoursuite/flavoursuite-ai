@@ -152,10 +152,13 @@ tools daily. Compete on being the only safe way to run anyone's tools.
    diff) is still accurate but was shot at 1535 × 730 and does not match the
    others' 1100 × 800; worth reshooting next time the dev database has a pending
    change request.
-3. **Publish 0.3.0 to wp.org.** Still serving 0.2.1; `tags/` contains only
-   `0.2.1`. Procedure is in [RELEASE.md](RELEASE.md).
-4. **Rotate the SVN password.** Credentials are never stored on disk; use
-   `--no-auth-cache` on every commit.
+3. ~~**Publish 0.3.0 to wp.org.**~~ Done 2026-07-27 — `r3624889` (trunk + assets),
+   `r3624893` (`tags/0.3.0`).
+4. **Rotate the SVN password — now overdue.** `--no-auth-cache` keeps it out of
+   `~/.subversion/`, and that still holds. But it has been pasted into assistant
+   sessions, so it is sitting in `~/.claude/history.jsonl` and the session
+   transcripts on this machine. Rotate at
+   <https://profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password>.
 5. **Watch reviews and the support forum.** Competitors sit at 5★ on 4–7 reviews;
    at this sample size the first few reviews move the needle enormously.
 

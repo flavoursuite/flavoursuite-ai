@@ -1,7 +1,13 @@
 # Release plan — 0.3.0
 
-**Status:** code complete and verified against a live WordPress 7.0.2 install.
-Committed to git (`1ebdade`), **not yet published to WordPress.org.**
+**Status: PUBLISHED 2026-07-27.** `r3624889` (trunk + assets), `r3624893`
+(`tags/0.3.0`). Live and downloadable; `tags/` now holds `0.2.1` and `0.3.0`, and
+`assets/` holds the banner pair, the icon pair, and four screenshots.
+
+Verified after publishing: the tag's `Stable tag` and plugin header both read
+`0.3.0`, `includes/ConnectionTokens.php` is present, and no `.playwright-mcp`
+artefacts made it in. No credential was cached — `~/.subversion/auth/svn.simple/`
+is still empty.
 
 > Working document. Not shipped to users — excluded via `.distignore`.
 > Strategy and market position live in [ROADMAP.md](ROADMAP.md).
