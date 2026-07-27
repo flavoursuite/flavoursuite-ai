@@ -53,14 +53,22 @@ Worth engaging upstream: influence plus credibility.
 | --- | ---: | ---: | --- | --- | --- |
 | Royal MCP | 9,000+ | 129 | DCR + PKCE | 60/min | none |
 | Easy MCP AI | 5,000+ | 242 | 2.0 / 2.1 | 60/min | "force draft" only |
-| WPVibe | 5,000+ | — | — | — | none |
+| WPVibe (SeedProd) | 5,000+ | — | — | — | none |
 | StifLi Flex MCP | 1,000+ | 122+ | 2.1 + PKCE | — | undo + client-side confirm |
-| **FlavourSuite AI** | **0 at launch** | **9** | DCR + PKCE | 60/min | **full diff + approve + rollback** |
+| **AI Engine (Meow Apps)** | **100,000+** | 36 free, more in Pro | bearer + RBAC | — | in-session confirm dialog |
+| **FlavourSuite AI** | **0 at launch** | **12** | DCR + PKCE | 60/min | **full diff + approve + rollback** |
 
 Notes:
 
+- **AI Engine is the category leader by an order of magnitude** — 100,000+ installs,
+  4.9★ on 850 reviews, added 2026-07-27 after it was missed in the original survey.
+  MCP server with 36 free tools; Pro adds plugin and theme management "including
+  code-level modifications". Its listing claims "an approval dialog before any
+  site-changing tool runs", but its MCP docs describe role-based access control
+  only — no diffs, no rollback, no persistent queue. Notably it markets that its
+  tools **"do not run arbitrary code"** and ships unrestricted access as a separate
+  "YOLO" plugin that self-disables on production.
 - **Royal MCP** launched 2026-01-14, is updated near-daily, free with no pro tier.
-  Strongest all-round competitor.
 - **Easy MCP AI** already auto-discovers plugin Abilities on 6.9+ — it *exposes*
   them without governing them.
 - **StifLi Flex MCP** monetises via add-ons (Copilot, Chat Agent, Automations),
@@ -68,15 +76,31 @@ Notes:
 
 ### Honest assessment
 
-We are last to market and have 9 tools against 122–242. The two capability gaps
-against every competitor — OAuth discovery and rate limiting — closed in 0.3.0;
-tool count is the remaining one, and is deliberately not the thing to fix.
+We are last to market and have 12 tools against 122–242, against a field whose
+leader has 100,000 installs. The two capability gaps against every competitor —
+OAuth discovery and rate limiting — closed in 0.3.0; tool count is the remaining
+one, and is deliberately not the thing to fix.
 
-But **no competitor has a real pre-execution approval queue.** StifLi's undo is
-post-hoc; its "Ask User" is a client-side confirm inside the agent's own session.
-Easy MCP's "force draft" is one blunt setting. Our model — a proposal that
-persists in wp-admin, reviewed by *a different human than the one driving the
-agent*, with staleness refusal — is unique. That is the moat.
+**Revised 2026-07-27.** The earlier claim that "no competitor has a pre-execution
+approval queue" is not defensible now that AI Engine is in the table: it markets an
+approval dialog to 100,000 sites. The narrower claim is true and, because it names
+properties an in-session dialog structurally *cannot* have, it is the more
+defensible one:
+
+> No competitor has a **persistent, server-side, diff-rendered approval queue that a
+> different human can review later, with staleness refusal and rollback.** Every
+> competing "approval" is a confirm inside the agent's own session — same human,
+> same minute, no record, no diff, no undo.
+
+StifLi's undo is post-hoc; its "Ask User" and AI Engine's dialog are both
+in-session confirms. Easy MCP's "force draft" is one blunt setting. That is the
+moat, and it is a narrower moat than we previously wrote down.
+
+Worth noting that AI Engine — the largest player, with the most to lose — draws its
+safety line in the same place we do: its tools "do not run arbitrary code", and
+unrestricted access ships as a separate plugin that switches itself off on
+production. Convergent design from the market leader is confirmation, not
+coincidence. See [PLAN-VIBE-CODING.md](PLAN-VIBE-CODING.md).
 
 **Do not compete on tool count.** That race is unwinnable against a plugin adding
 tools daily. Compete on being the only safe way to run anyone's tools.
