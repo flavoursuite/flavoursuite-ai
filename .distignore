@@ -11,6 +11,8 @@
 /dist/
 /bin/
 /.wordpress-org/
+/.playwright-mcp/
+/.claude/
 ROADMAP.md
 RELEASE.md
 PLAN-VIBE-CODING.md

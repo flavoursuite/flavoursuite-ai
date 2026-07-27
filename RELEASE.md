@@ -186,3 +186,9 @@ name must equal the readme `Stable tag:` value exactly.
   split shell output on `|` when handling them.
 - Run Plugin Check against the **built ZIP**, not the working tree, or it flags
   `dist/`, `bin/` and the dotfiles that `.distignore` already strips.
+- **`.distignore` is a denylist and fails open.** Anything new in the working tree
+  ships by default. `bin/build-zip.sh` now refuses to build when a staged file
+  outside `vendor/` is untracked by git, which inverts that to an allowlist. Added
+  after `.playwright-mcp/` page snapshots — containing live connection tokens —
+  reached the 0.3.0 ZIP and were caught by eye while staging the SVN commit, not
+  by any check. Always read `svn st` before committing; it is the last gate.

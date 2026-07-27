@@ -26,6 +26,27 @@ rsync -a --exclude-from="$REPO/.distignore" "$REPO"/ "$STAGE/$SLUG/"
 
 composer install --no-dev --optimize-autoloader --quiet --working-dir="$STAGE/$SLUG"
 
+# Nothing outside vendor/ ships unless git tracks it.
+#
+# .distignore is a denylist, so anything new in the working tree — scratch files,
+# editor state, tool output — ships by DEFAULT and only stops shipping once
+# someone remembers to exclude it. That is backwards for an artefact published to
+# hundreds of thousands of sites. Tracked-by-git is an allowlist that is already
+# curated for exactly this reason, so require staged ⊆ tracked.
+#
+# This exists because .playwright-mcp/ page snapshots — which contained live
+# connection tokens — reached the release ZIP and were caught only by eye while
+# staging the 0.3.0 SVN commit.
+git -C "$REPO" ls-files | sort > "$STAGE/tracked.txt"
+( cd "$STAGE/$SLUG" && find . -type f -not -path './vendor/*' -printf '%P\n' | sort ) > "$STAGE/staged.txt"
+UNTRACKED="$(comm -23 "$STAGE/staged.txt" "$STAGE/tracked.txt")"
+if [ -n "$UNTRACKED" ]; then
+	echo "Refusing to build: untracked files staged for release." >&2
+	echo "Add them to .distignore, or commit them if they belong in the plugin:" >&2
+	printf '  %s\n' $UNTRACKED >&2
+	exit 1
+fi
+
 # The autoloader entry point must exist and dev-only packages must not.
 [ -f "$STAGE/$SLUG/vendor/autoload_packages.php" ] || { echo "Jetpack autoloader missing from build" >&2; exit 1; }
 [ ! -d "$STAGE/$SLUG/vendor/phpcompatibility" ] || { echo "Dev package leaked into build" >&2; exit 1; }
