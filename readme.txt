@@ -19,7 +19,8 @@ It is built on the WordPress core **Abilities API** (WordPress 6.9+) and the off
 = Security first =
 
 * **Off by default.** Installing the plugin exposes nothing. The MCP endpoint only exists after an administrator turns it on under *Settings → FlavourSuite AI*.
-* **Every tool call is permission-checked.** Agents authenticate as a real WordPress user — via an Application Password, or via OAuth 2.1 with PKCE for cloud clients — and each tool enforces that user's capabilities (`manage_options`, `read`, `manage_woocommerce`, …). There is no anonymous access, ever. Connected agents are listed in settings and can be revoked in one click.
+* **Every tool call is permission-checked.** Agents authenticate as a real WordPress user — via a connection token, an Application Password, or OAuth 2.1 with PKCE for cloud clients — and each tool enforces that user's capabilities (`manage_options`, `read`, `manage_woocommerce`, …). There is no anonymous access, ever. Connected agents are listed in settings and can be revoked in one click.
+* **Scoped credentials.** Connection tokens are named, individually revocable, optionally expiring, and accepted *only* on the MCP endpoint — the rest of the REST API rejects them. Give each agent its own, and a leaked config costs you that agent's access rather than the whole account. Only a SHA-256 hash is stored, so a database dump yields nothing usable.
 * **Rate limited.** Tool calls are capped per user per minute so a runaway agent gets a 429 instead of exhausting your server, and the public OAuth endpoints are capped more tightly per IP.
 * **Agents propose, you approve.** No tool writes to your live site. Agents can *propose* changes (Additional CSS, post/page content), which land as pending change requests under *Tools → Agent Changes* — you review a before/after diff and approve, reject, or later roll back each one. Propose tools are additionally **off by default**, and read-only tools have per-tool switches too.
 * **Audit trail.** The settings screen shows who called which tool, when, and whether it succeeded, and exports to CSV. Arguments and results are never stored.
@@ -60,8 +61,8 @@ Integrations are detected automatically: if WooCommerce is active its tools appe
 
 1. Install and activate the plugin (WordPress 6.9+, PHP 7.4+).
 2. Go to *Settings → FlavourSuite AI* and enable the MCP server.
-3. Create an Application Password for your user (*Users → Profile → Application Passwords*).
-4. On the settings page, choose your agent from the list and paste the Application Password into the recipe builder — it produces the exact configuration block for that client. The token is computed in your browser and never stored. Cloud clients such as Claude and ChatGPT skip this step entirely: point them at the endpoint and approve the connection when prompted.
+3. Create a connection token on the same screen — give it a name and, if you like, an expiry. It is shown once.
+4. Choose your agent from the list below it. The recipe builder produces the exact configuration block for that client, with the endpoint and the token already filled in. The header is assembled in your browser and never sent back or stored. Cloud clients such as Claude and ChatGPT skip steps 3 and 4 entirely: point them at the endpoint and approve the connection when prompted.
 
 For example, with Claude Code: `claude mcp add --transport http flavoursuite https://example.com/wp-json/flavoursuite-ai/mcp`
 
@@ -79,7 +80,17 @@ No. The plugin contains no API keys and makes no outbound requests. It's a serve
 
 = How do agents authenticate? =
 
-Two ways. Desktop and command-line clients use WordPress Application Passwords over HTTPS (HTTP Basic auth) — revoke the password and access ends immediately. Cloud clients such as claude.ai and ChatGPT use OAuth 2.1 with PKCE: they discover the site automatically, you approve the connection on a consent screen in wp-admin, and you can revoke that agent at any time under Settings → FlavourSuite AI. Either way the agent acts as one WordPress user and is limited to that user's capabilities.
+Three ways, all as a real WordPress user limited to that user's capabilities.
+
+**Connection tokens** (recommended for desktop and command-line clients) are created on the settings screen, sent as `Authorization: Bearer …`, and accepted only on the MCP endpoint — the same token is refused by every other REST route, so an agent that has one cannot use it to read your users or edit posts directly. Each token has a name, an optional expiry, and its own Revoke button. Only a hash is stored.
+
+**Application Passwords** still work, for setups already built around them. Be aware that they authenticate against the entire REST API, not just MCP.
+
+**OAuth 2.1 with PKCE** is for cloud clients such as claude.ai and ChatGPT: they discover the site automatically, you approve the connection on a consent screen in wp-admin, and you can revoke that agent at any time under Settings → FlavourSuite AI.
+
+= What happens if a connection token leaks? =
+
+Whoever holds it can call the MCP tools you have enabled, as the user it was issued for — and nothing else. It is rejected on every REST route except the MCP endpoint, so it cannot be replayed against `wp-json/wp/v2/*`. Revoke it on the settings screen and it stops working on the next request; other agents are unaffected. Every call it made is in the audit log.
 
 = Which AI agents and models does this work with? =
 
@@ -106,10 +117,12 @@ Only through you. Agents can *propose* changes (Additional CSS, post/page conten
 1. Settings → FlavourSuite AI: master switch (off until you turn it on), per-tool toggles with write tools flagged in red, and the per-user rate limit.
 2. Tools → Agent Changes: a pending agent proposal shown as a before/after diff with Approve & apply, Reject, and rollback for applied changes.
 3. Connect an agent: pick your client and get the exact config for it — the endpoint and credential are filled in for you, and the header is built in your browser.
+4. Connection tokens: a named, revocable credential per agent, with optional expiry and a last-used column. Each one works only on the MCP endpoint.
 
 == Changelog ==
 
 = 0.3.0 =
+* Connection tokens: create named, revocable, optionally expiring bearer tokens for each agent. Unlike an Application Password they are accepted only on the MCP endpoint, so a leaked agent config cannot be used against the rest of the REST API. Only a SHA-256 hash is stored and the token is displayed once, at creation.
 * OAuth discovery: the authorization-server and protected-resource documents are now served from `/.well-known/`, so cloud MCP clients (claude.ai, ChatGPT) can find and connect to the site without an Application Password.
 * Connected agents: OAuth clients are now listed under Settings → FlavourSuite AI with a Revoke action that removes the registration and immediately invalidates every token issued to it.
 * Rate limiting: authenticated tool calls are capped per user per minute (60 by default, configurable, 0 to disable) and the public OAuth endpoints are capped per IP. Over-budget requests get a 429 with Retry-After.
@@ -137,7 +150,7 @@ Only through you. Agents can *propose* changes (Additional CSS, post/page conten
 == Upgrade Notice ==
 
 = 0.3.0 =
-Adds OAuth discovery for cloud clients, connection recipes for every major agent, a Connected agents list with one-click revoke, per-user rate limiting, and CSV export of the audit log.
+Adds scoped connection tokens (safer than Application Passwords — they only work on the MCP endpoint), OAuth discovery for cloud clients, connection recipes for every major agent, a Connected agents list with one-click revoke, per-user rate limiting, and CSV export of the audit log.
 
 = 0.2.0 =
 Adds the Approvals flow: agents can now propose CSS and content changes that you review and apply in wp-admin. Propose tools are off by default — nothing changes unless you enable them.

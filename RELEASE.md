@@ -28,6 +28,27 @@ exercises the awkward path cases rather than the easy ones.
 | OAuth: wrong PKCE verifier | `invalid_grant`, correctly rejected |
 | OAuth token → MCP `initialize` → `tools/list` | 12 tools returned over bearer auth |
 
+## Connection tokens, verified 2026-07-27
+
+| Area | Result |
+| --- | --- |
+| Create → `initialize` → `tools/list` → `tools/call` | 12 tools, `flavoursuite-site-overview` executed, audit log attributes it to `mego` |
+| **Same token on `/wp/v2/users?context=edit`** | **401** |
+| **Same token on `/wp/v2/settings`** | **401 `rest_forbidden`** |
+| Never overrides an earlier auth filter | passing `99` in returns `99` |
+| Forged, truncated, and `Basic` headers | all rejected |
+| Expired token | rejected; flipping `expires` back to 0 restores it |
+| Revoke mid-session | next request on the *same* `Mcp-Session-Id` returns 401 |
+| Plaintext in the database | absent — only the SHA-256 hash |
+| Plaintext in the redirect URL | absent — handed over in a 60-second per-user transient |
+| One-shot display | replaying `?fs-token=created` does not resurrect it |
+| Option autoload | `off` |
+| Nonce actions | both forms validate against their handler's action; no `admin_post_nopriv_` registered |
+| XSS via token label | `<script>` in a label is escaped in every output position |
+| Recipe builder, both modes | Bearer and Basic headers built correctly; switching mode clears the other's header |
+| PHP 7.4 compatibility | clean (PHPCompatibilityWP) |
+| Browser console | clean |
+
 **One real bug found and fixed by this pass.** The dev tree fataled with
 `Class "FlavourSuite\Ai\OAuth\Discovery" not found`. The Jetpack Autoloader
 compiles a *static classmap at composer time*; the three new classes were created
@@ -70,11 +91,14 @@ Recaptured 2026-07-27 at 1100 × 800 from the live install via Playwright:
 
 - `screenshot-1.png` — settings top: master switch, the twelve tool toggles with
   write tools flagged red, and the rate limit.
-- `screenshot-3.png` — the connect section with the agent picker on Cursor,
-  showing the file hint and the generated JSON.
+- `screenshot-3.png` — the connect section on Claude Code, with the connection
+  token selected and the generated `--header "Authorization: Bearer fsai_…"`.
+  The token shown is illustrative, not a real credential.
+- `screenshot-4.png` — the connection tokens table: three agents, mixed expiry
+  states, last-used column, per-row Revoke.
 
 `screenshot-2.png` (approvals diff) is unchanged and still accurate, though it is
-1535 × 730 and so does not match the other two. Worth reshooting for consistency
+1535 × 730 and so does not match the other three. Worth reshooting for consistency
 next time there is a pending change request in the dev database.
 
 ### 3. Codex CLI recipe — DONE
@@ -145,7 +169,19 @@ name must equal the readme `Stable tag:` value exactly.
 - The dev tree is symlinked into `/var/www/html/site/wp-content/plugins/`, so
   edits are live immediately. Apache and MariaDB must be running.
 - `wp eval` with `wp_set_current_user()` renders admin screens headlessly, which
-  is much faster than driving a browser for smoke tests.
+  is much faster than driving a browser for smoke tests. **`wp eval-file` needs a
+  leading `<?php`** — it `include`s the file, so without the tag the whole script
+  is echoed as text and appears to "run" silently.
+- **Editing an asset without bumping the version serves a stale file in dev.**
+  Scripts are enqueued with `FLAVOURSUITE_AI_VERSION` as the cache buster, so two
+  edits inside one version are invisible to a browser that already cached the
+  first. Real users are unaffected — they only ever see a released version — but
+  in dev, force revalidation (`fetch(src, {cache: 'reload'})`, then reload) before
+  concluding that a JS change does not work.
+- Rendering `Settings::render_page()` twice in one process is a test artifact, not
+  a real request. State that must not survive a render therefore belongs in a
+  local, not a static property — `take_new_token()` exists for exactly that
+  reason.
 - WordPress auth cookies are pipe-delimited (`user|expiry|token|hmac`) — never
   split shell output on `|` when handling them.
 - Run Plugin Check against the **built ZIP**, not the working tree, or it flags

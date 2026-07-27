@@ -17,7 +17,12 @@ final class Settings {
 
 	private const OPTION = 'flavoursuite_ai_settings';
 
-	private const REVOKE_ACTION = 'flavoursuite_ai_revoke_client';
+	private const REVOKE_ACTION       = 'flavoursuite_ai_revoke_client';
+	private const CREATE_TOKEN_ACTION = 'flavoursuite_ai_create_token';
+	private const REVOKE_TOKEN_ACTION = 'flavoursuite_ai_revoke_token';
+
+	/** One-shot handoff of a freshly minted token; see handle_create_token(). */
+	private const NEW_TOKEN_TRANSIENT = 'fs_new_token_';
 
 	/**
 	 * Hook suffix returned by add_options_page(); used to enqueue the
@@ -30,6 +35,12 @@ final class Settings {
 		add_action( 'admin_init', array( self::class, 'register_setting' ) );
 		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_assets' ) );
 		add_action( 'admin_post_' . self::REVOKE_ACTION, array( self::class, 'handle_revoke' ) );
+		add_action( 'admin_post_' . self::CREATE_TOKEN_ACTION, array( self::class, 'handle_create_token' ) );
+		add_action( 'admin_post_' . self::REVOKE_TOKEN_ACTION, array( self::class, 'handle_revoke_token' ) );
+	}
+
+	private static function page_url(): string {
+		return admin_url( 'options-general.php?page=flavoursuite-ai' );
 	}
 
 	public static function is_enabled(): bool {
@@ -65,13 +76,56 @@ final class Settings {
 		$client_id = isset( $_POST['client_id'] ) ? sanitize_text_field( wp_unslash( $_POST['client_id'] ) ) : '';
 		$revoked   = '' !== $client_id && OAuth\Store::delete_client( $client_id );
 
-		wp_safe_redirect(
-			add_query_arg(
-				'fs-revoked',
-				$revoked ? '1' : '0',
-				admin_url( 'options-general.php?page=flavoursuite-ai' )
-			)
-		);
+		wp_safe_redirect( add_query_arg( 'fs-revoked', $revoked ? '1' : '0', self::page_url() ) );
+		exit;
+	}
+
+	/**
+	 * Mints a connection token for the current user.
+	 */
+	public static function handle_create_token(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				esc_html__( 'You are not allowed to create connection tokens.', 'flavoursuite-ai' ),
+				'',
+				array( 'response' => 403 )
+			);
+		}
+
+		check_admin_referer( self::CREATE_TOKEN_ACTION );
+
+		$label = isset( $_POST['token_label'] ) ? sanitize_text_field( wp_unslash( $_POST['token_label'] ) ) : '';
+		$ttl   = isset( $_POST['token_ttl'] ) ? absint( $_POST['token_ttl'] ) : 0;
+		$ttl   = in_array( $ttl, array( 0, 30, 90, 365 ), true ) ? $ttl : 0;
+
+		$plain = ConnectionTokens::create( $label, get_current_user_id(), $ttl );
+
+		if ( null !== $plain ) {
+			// Handed to the next request in a short-lived transient rather than
+			// the redirect URL: a credential in a query string ends up in
+			// browser history, server access logs and the Referer header.
+			set_transient( self::NEW_TOKEN_TRANSIENT . get_current_user_id(), $plain, MINUTE_IN_SECONDS );
+		}
+
+		wp_safe_redirect( add_query_arg( 'fs-token', null === $plain ? 'full' : 'created', self::page_url() ) );
+		exit;
+	}
+
+	public static function handle_revoke_token(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				esc_html__( 'You are not allowed to revoke connection tokens.', 'flavoursuite-ai' ),
+				'',
+				array( 'response' => 403 )
+			);
+		}
+
+		check_admin_referer( self::REVOKE_TOKEN_ACTION );
+
+		$id      = isset( $_POST['token_id'] ) ? sanitize_text_field( wp_unslash( $_POST['token_id'] ) ) : '';
+		$revoked = '' !== $id && ConnectionTokens::delete( $id );
+
+		wp_safe_redirect( add_query_arg( 'fs-token', $revoked ? 'revoked' : 'missing', self::page_url() ) );
 		exit;
 	}
 
@@ -191,6 +245,12 @@ final class Settings {
 		$tools    = Mcp::tool_names();
 		$endpoint = rest_url( 'flavoursuite-ai/mcp' );
 
+		// Plaintext of a token minted by the previous request, read and burned
+		// here so it exists only as a local for the duration of this render. It
+		// is shown once in the tokens section and prefilled into the recipe
+		// builder below it; both are just reads of this variable.
+		$new_token = self::take_new_token();
+
 		// Recipes are handed to the browser as data; __URL__ and __AUTH__ are
 		// substituted there so the credential never round-trips to the server.
 		$profiles = ClientProfiles::all();
@@ -263,6 +323,11 @@ final class Settings {
 
 			<hr />
 
+			<h2><?php esc_html_e( 'Connection tokens', 'flavoursuite-ai' ); ?></h2>
+			<?php self::render_connection_tokens( $new_token ); ?>
+
+			<hr />
+
 			<h2><?php esc_html_e( 'Connect an agent', 'flavoursuite-ai' ); ?></h2>
 			<?php if ( ! self::is_enabled() ) : ?>
 				<p><em><?php esc_html_e( 'The MCP server is currently disabled — enable it above first.', 'flavoursuite-ai' ); ?></em></p>
@@ -294,23 +359,55 @@ final class Settings {
 
 			<div id="fs-credentials">
 				<p>
-					<?php esc_html_e( 'Agents authenticate as a WordPress user with an Application Password (create one under Users → Profile → Application Passwords). It is turned into a header in your browser and never sent or saved anywhere.', 'flavoursuite-ai' ); ?>
+					<?php esc_html_e( 'The credential is turned into an Authorization header in your browser — it is never sent back to the server or saved anywhere.', 'flavoursuite-ai' ); ?>
 				</p>
 				<p>
+					<label style="margin-right:16px;">
+						<input type="radio" name="fs-auth-mode" value="token" checked />
+						<?php esc_html_e( 'Connection token (recommended)', 'flavoursuite-ai' ); ?>
+					</label>
 					<label>
-						<?php esc_html_e( 'WordPress username', 'flavoursuite-ai' ); ?><br />
-						<input type="text" id="fs-token-user" class="regular-text" value="<?php echo esc_attr( wp_get_current_user()->user_login ); ?>" autocomplete="off" spellcheck="false" />
+						<input type="radio" name="fs-auth-mode" value="basic" />
+						<?php esc_html_e( 'Application password', 'flavoursuite-ai' ); ?>
 					</label>
 				</p>
-				<p>
-					<label>
-						<?php esc_html_e( 'Application password', 'flavoursuite-ai' ); ?><br />
-						<input type="password" id="fs-token-pass" class="regular-text" autocomplete="off" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" />
-					</label>
-				</p>
+
+				<div id="fs-auth-token">
+					<p>
+						<label>
+							<?php esc_html_e( 'Connection token', 'flavoursuite-ai' ); ?><br />
+							<input type="text" id="fs-token-value" class="large-text code" autocomplete="off" spellcheck="false"
+								placeholder="fsai_…" value="<?php echo esc_attr( $new_token ); ?>" />
+						</label>
+					</p>
+					<p class="description">
+						<?php esc_html_e( 'Create one in the section above. It only works on the MCP endpoint, so a leaked agent config cannot be replayed against the rest of the REST API.', 'flavoursuite-ai' ); ?>
+					</p>
+				</div>
+
+				<div id="fs-auth-basic" style="display:none;">
+					<p>
+						<label>
+							<?php esc_html_e( 'WordPress username', 'flavoursuite-ai' ); ?><br />
+							<input type="text" id="fs-token-user" class="regular-text" value="<?php echo esc_attr( wp_get_current_user()->user_login ); ?>" autocomplete="off" spellcheck="false" />
+						</label>
+					</p>
+					<p>
+						<label>
+							<?php esc_html_e( 'Application password', 'flavoursuite-ai' ); ?><br />
+							<input type="password" id="fs-token-pass" class="regular-text" autocomplete="off" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" />
+						</label>
+					</p>
+					<p class="description">
+						<?php esc_html_e( 'Create one under Users → Profile → Application Passwords. Note that it authenticates the agent against your entire account, not just MCP — a connection token is the safer choice.', 'flavoursuite-ai' ); ?>
+					</p>
+				</div>
+
 				<p>
 					<button type="button" id="fs-token-generate" class="button button-secondary"><?php esc_html_e( 'Build connection recipe', 'flavoursuite-ai' ); ?></button>
-					<span id="fs-token-error" style="color:#b32d2e;display:none;"><?php esc_html_e( 'Enter both the username and the application password.', 'flavoursuite-ai' ); ?></span>
+					<span id="fs-token-error" style="color:#b32d2e;display:none;"
+						data-token="<?php esc_attr_e( 'Paste a connection token first.', 'flavoursuite-ai' ); ?>"
+						data-basic="<?php esc_attr_e( 'Enter both the username and the application password.', 'flavoursuite-ai' ); ?>"></span>
 				</p>
 			</div>
 
@@ -350,6 +447,190 @@ final class Settings {
 	}
 
 	/**
+	 * Collects the plaintext of a token minted by the previous request.
+	 *
+	 * Read and burn: whichever render gets there first receives the value, and a
+	 * reload, a second tab, or another user's session receives nothing. The
+	 * transient is keyed per user, so it is never readable across accounts.
+	 *
+	 * @return string Empty when no token is waiting.
+	 */
+	private static function take_new_token(): string {
+		$key   = self::NEW_TOKEN_TRANSIENT . get_current_user_id();
+		$plain = get_transient( $key );
+
+		if ( ! is_string( $plain ) || '' === $plain ) {
+			return '';
+		}
+
+		delete_transient( $key );
+
+		return $plain;
+	}
+
+	/**
+	 * Create and revoke MCP-scoped bearer tokens.
+	 *
+	 * Only a SHA-256 hash is stored, so the plaintext exists for exactly one
+	 * render. Rather than trust the user to copy it, this section runs above the
+	 * recipe builder and the caller prefills it there.
+	 *
+	 * @param string $new_token Plaintext just minted, or '' — see take_new_token().
+	 */
+	private static function render_connection_tokens( string $new_token ): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only flag from our own redirect.
+		$status = isset( $_GET['fs-token'] ) ? sanitize_key( wp_unslash( $_GET['fs-token'] ) ) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$notices = array(
+			'full'    => array(
+				'error',
+				__( 'Token limit reached. Revoke one below before creating another.', 'flavoursuite-ai' ),
+			),
+			'revoked' => array(
+				'success',
+				__( 'Connection token revoked. Any agent using it is locked out immediately.', 'flavoursuite-ai' ),
+			),
+			'missing' => array(
+				'warning',
+				__( 'That token had already been revoked.', 'flavoursuite-ai' ),
+			),
+		);
+
+		if ( isset( $notices[ $status ] ) ) {
+			printf(
+				'<div class="notice notice-%1$s inline"><p>%2$s</p></div>',
+				esc_attr( $notices[ $status ][0] ),
+				esc_html( $notices[ $status ][1] )
+			);
+		}
+		?>
+		<p>
+			<?php esc_html_e( 'A connection token lets an agent act as your WordPress user, but only on the MCP endpoint — it is rejected everywhere else in the REST API. Prefer one of these over an Application Password, which would grant the agent your full account.', 'flavoursuite-ai' ); ?>
+		</p>
+
+		<?php if ( '' !== $new_token ) : ?>
+			<div class="notice notice-success inline">
+				<p><strong><?php esc_html_e( 'Copy this token now — it is never shown again.', 'flavoursuite-ai' ); ?></strong></p>
+				<p>
+					<label for="fs-new-token" class="screen-reader-text"><?php esc_html_e( 'New connection token', 'flavoursuite-ai' ); ?></label>
+					<input type="text" id="fs-new-token" class="large-text code" readonly value="<?php echo esc_attr( $new_token ); ?>" />
+				</p>
+				<p class="description">
+					<?php esc_html_e( 'It has already been filled into the connection recipe below. Only a hash is kept here, so if you lose it you will have to create a new one.', 'flavoursuite-ai' ); ?>
+				</p>
+			</div>
+		<?php endif; ?>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:12px 0;">
+			<?php wp_nonce_field( self::CREATE_TOKEN_ACTION ); ?>
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::CREATE_TOKEN_ACTION ); ?>" />
+			<label for="fs-token-label" class="screen-reader-text"><?php esc_html_e( 'Token label', 'flavoursuite-ai' ); ?></label>
+			<input type="text" id="fs-token-label" name="token_label" class="regular-text"
+				placeholder="<?php esc_attr_e( 'What is it for? e.g. Claude Code on my laptop', 'flavoursuite-ai' ); ?>" />
+			<label for="fs-token-ttl" class="screen-reader-text"><?php esc_html_e( 'Expiry', 'flavoursuite-ai' ); ?></label>
+			<select id="fs-token-ttl" name="token_ttl">
+				<option value="0"><?php esc_html_e( 'Never expires', 'flavoursuite-ai' ); ?></option>
+				<option value="30"><?php esc_html_e( 'Expires in 30 days', 'flavoursuite-ai' ); ?></option>
+				<option value="90"><?php esc_html_e( 'Expires in 90 days', 'flavoursuite-ai' ); ?></option>
+				<option value="365"><?php esc_html_e( 'Expires in a year', 'flavoursuite-ai' ); ?></option>
+			</select>
+			<button type="submit" class="button button-primary"><?php esc_html_e( 'Create token', 'flavoursuite-ai' ); ?></button>
+		</form>
+
+		<?php
+		$tokens = ConnectionTokens::all();
+
+		if ( array() === $tokens ) {
+			echo '<p><em>' . esc_html__( 'No connection tokens yet.', 'flavoursuite-ai' ) . '</em></p>';
+			return;
+		}
+
+		$now = time();
+		?>
+		<table class="widefat striped" style="max-width:900px;">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Label', 'flavoursuite-ai' ); ?></th>
+					<th><?php esc_html_e( 'Acts as', 'flavoursuite-ai' ); ?></th>
+					<th><?php esc_html_e( 'Created', 'flavoursuite-ai' ); ?></th>
+					<th><?php esc_html_e( 'Last used', 'flavoursuite-ai' ); ?></th>
+					<th><?php esc_html_e( 'Expires', 'flavoursuite-ai' ); ?></th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $tokens as $token ) : ?>
+					<?php
+					$user    = get_user_by( 'id', (int) $token['user'] );
+					$expires = (int) $token['expires'];
+					$expired = $expires > 0 && $expires < $now;
+					?>
+					<tr>
+						<td><strong><?php echo esc_html( (string) $token['label'] ); ?></strong></td>
+						<td>
+							<?php if ( $user ) : ?>
+								<code><?php echo esc_html( $user->user_login ); ?></code>
+							<?php else : ?>
+								<em style="color:#b32d2e;"><?php esc_html_e( 'deleted user', 'flavoursuite-ai' ); ?></em>
+							<?php endif; ?>
+						</td>
+						<td>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %s: human time diff, e.g. "5 mins". */
+									__( '%s ago', 'flavoursuite-ai' ),
+									human_time_diff( (int) $token['created'] )
+								)
+							);
+							?>
+						</td>
+						<td>
+							<?php if ( (int) $token['last_used'] > 0 ) : ?>
+								<?php
+								echo esc_html(
+									sprintf(
+										/* translators: %s: human time diff, e.g. "5 mins". */
+										__( '%s ago', 'flavoursuite-ai' ),
+										human_time_diff( (int) $token['last_used'] )
+									)
+								);
+								?>
+							<?php else : ?>
+								<span style="color:#8c8f94;"><?php esc_html_e( 'Never', 'flavoursuite-ai' ); ?></span>
+							<?php endif; ?>
+						</td>
+						<td>
+							<?php if ( 0 === $expires ) : ?>
+								<span style="color:#8c8f94;"><?php esc_html_e( 'Never', 'flavoursuite-ai' ); ?></span>
+							<?php elseif ( $expired ) : ?>
+								<strong style="color:#b32d2e;"><?php esc_html_e( 'Expired', 'flavoursuite-ai' ); ?></strong>
+							<?php else : ?>
+								<?php echo esc_html( wp_date( (string) get_option( 'date_format' ), $expires ) ); ?>
+							<?php endif; ?>
+						</td>
+						<td style="text-align:right;">
+							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+								<?php wp_nonce_field( self::REVOKE_TOKEN_ACTION ); ?>
+								<input type="hidden" name="action" value="<?php echo esc_attr( self::REVOKE_TOKEN_ACTION ); ?>" />
+								<input type="hidden" name="token_id" value="<?php echo esc_attr( (string) $token['id'] ); ?>" />
+								<button type="submit" class="button button-small button-link-delete">
+									<?php esc_html_e( 'Revoke', 'flavoursuite-ai' ); ?>
+								</button>
+							</form>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<p class="description">
+			<?php esc_html_e( '"Last used" is recorded at most once every five minutes, so it lags a busy agent slightly. Expired tokens stop working immediately but stay listed until you revoke them.', 'flavoursuite-ai' ); ?>
+		</p>
+		<?php
+	}
+
+	/**
 	 * OAuth clients registered against this site, with a revoke action.
 	 *
 	 * Registration is public by RFC 7591 — any agent may register itself — so
@@ -375,7 +656,7 @@ final class Settings {
 		$clients = OAuth\Store::clients();
 
 		if ( array() === $clients ) {
-			echo '<p><em>' . esc_html__( 'No agents have connected over OAuth yet. Agents using an Application Password authenticate as your WordPress user and are not listed here — revoke those under Users → Profile.', 'flavoursuite-ai' ) . '</em></p>';
+			echo '<p><em>' . esc_html__( 'No agents have connected over OAuth yet. This table covers cloud clients only — agents using a connection token are listed above, and agents using an Application Password are revoked under Users → Profile.', 'flavoursuite-ai' ) . '</em></p>';
 			return;
 		}
 

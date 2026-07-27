@@ -100,6 +100,7 @@ final class Lifecycle {
 			OAuth\Server::register();
 			OAuth\Consent::register();
 			OAuth\Discovery::register();
+			ConnectionTokens::register();
 			RateLimit::register();
 		}
 

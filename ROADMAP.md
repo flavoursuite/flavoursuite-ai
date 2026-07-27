@@ -103,6 +103,15 @@ tools daily. Compete on being the only safe way to run anyone's tools.
   and permanently denied new agents. Anonymous callers get a tighter per-IP
   budget.
 - **Audit log CSV export.**
+- **Connection tokens.** `ConnectionTokens.php` — named, per-agent, revocable
+  bearer tokens with optional expiry, stored only as SHA-256 hashes and shown
+  once at creation. The one line that carries the entire security argument is the
+  route check in `authenticate()`: the token resolves to a user only when the
+  request URI contains `flavoursuite-ai/mcp`, so an agent config that leaks buys
+  the tool list and nothing else. Verified over HTTP: the same token that
+  completes an MCP `tools/list` returns 401 on `/wp/v2/users` and
+  `/wp/v2/settings`. Application Passwords still work, demoted to a second option
+  in the recipe builder.
 - **Connection recipes for every major agent.** `ClientProfiles.php` — 11 recipes
   across command line, editors, cloud connectors, GUI apps, and an `mcp-remote`
   stdio bridge as the universal fallback. Keyed by *client*, never by model:
@@ -112,24 +121,28 @@ tools daily. Compete on being the only safe way to run anyone's tools.
 
 ### Now — post-launch hygiene
 
-1. **Banner + icon.** `.wordpress-org/` has only two screenshots, so the public
-   page renders a generated placeholder against five polished competitors.
-   Cheapest available win on install rate.
-2. **Refresh screenshot 1.** The settings screen gained the agent picker, rate
-   limit field, and connected-agents table in 0.3.0; the shipped PNG predates all
-   three.
-3. **Rotate the SVN password.** Credentials are never stored on disk; use
+1. ~~**Banner + icon.**~~ Done — rendered from SVG in `.wordpress-org/src/`, so a
+   revision is a one-line `rsvg-convert` rather than a redraw.
+2. ~~**Refresh screenshots.**~~ Done — 1 (settings), 3 (connect, now showing the
+   token recipe) and 4 (connection tokens) are current. Screenshot 2 (approvals
+   diff) is still accurate but was shot at 1535 × 730 and does not match the
+   others' 1100 × 800; worth reshooting next time the dev database has a pending
+   change request.
+3. **Publish 0.3.0 to wp.org.** Still serving 0.2.1; `tags/` contains only
+   `0.2.1`. Procedure is in [RELEASE.md](RELEASE.md).
+4. **Rotate the SVN password.** Credentials are never stored on disk; use
    `--no-auth-cache` on every commit.
-4. **Watch reviews and the support forum.** Competitors sit at 5★ on 4–7 reviews;
+5. **Watch reviews and the support forum.** Competitors sit at 5★ on 4–7 reviews;
    at this sample size the first few reviews move the needle enormously.
 
 ### Next
 
-5. **Connection tokens.** Named, per-agent, revocable static bearer tokens scoped
-   to the MCP route, replacing Application Passwords for header-based clients. An
-   application password grants everything its user can do across the whole REST
-   API; a connection token would not. Also the prerequisite for per-agent tool
-   allowlists and expiry.
+6. **Per-agent tool allowlists.** Connection tokens shipped with a `user` field
+   and nothing else; the natural next field is a tool allowlist, so a token can
+   be narrower than the account it acts as. Today every agent sees whatever the
+   global tool switches expose, which means "read-only agent" is not expressible
+   without a second WordPress user. Storage and UI are already in place — this is
+   an extra column on the create form plus a check in `Mcp`.
 
 ### Strategic — 0.4.0+
 
