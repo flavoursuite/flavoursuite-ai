@@ -52,8 +52,8 @@ final class ClientProfiles {
 				'group'    => __( 'Command line', 'flavoursuite-ai' ),
 				'auth'     => 'header',
 				'file'     => '~/.codex/config.toml',
-				'note'     => __( 'Requires a Codex build with Streamable HTTP support. If yours is stdio-only, use the “Any other agent” recipe instead.', 'flavoursuite-ai' ),
-				'template' => "[mcp_servers.flavoursuite]\nurl = \"__URL__\"\n\n[mcp_servers.flavoursuite.http_headers]\nAuthorization = \"__AUTH__\"",
+				'note'     => __( 'Codex supports Streamable HTTP with no experimental flag. To let Codex run the OAuth flow instead of carrying a header, replace the http_headers line with auth = "oauth".', 'flavoursuite-ai' ),
+				'template' => "[mcp_servers.flavoursuite]\nurl = \"__URL__\"\nhttp_headers = { \"Authorization\" = \"__AUTH__\" }",
 			),
 			array(
 				'id'       => 'opencode',

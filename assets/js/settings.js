@@ -61,12 +61,10 @@
 		credentials.style.display = needsAuth ? '' : 'none';
 		noteEl.textContent        = profile.note || '';
 
-		if ( profile.file ) {
-			fileValue.textContent  = profile.file;
-			fileLine.style.display = '';
-		} else {
-			fileLine.style.display = 'none';
-		}
+		// Clear as well as hide: leaving the previous profile's path in the DOM
+		// would resurface it the moment this line is ever shown unconditionally.
+		fileValue.textContent  = profile.file || '';
+		fileLine.style.display = profile.file ? '' : 'none';
 
 		snippet.textContent = profile.template
 			.split( '__URL__' ).join( endpoint )

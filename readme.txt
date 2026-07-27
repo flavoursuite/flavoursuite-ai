@@ -103,8 +103,9 @@ Only through you. Agents can *propose* changes (Additional CSS, post/page conten
 
 == Screenshots ==
 
-1. Settings → FlavourSuite AI: master switch, per-tool toggles (write tools flagged and off by default), rate limit, and the per-agent connection recipe builder.
+1. Settings → FlavourSuite AI: master switch (off until you turn it on), per-tool toggles with write tools flagged in red, and the per-user rate limit.
 2. Tools → Agent Changes: a pending agent proposal shown as a before/after diff with Approve & apply, Reject, and rollback for applied changes.
+3. Connect an agent: pick your client and get the exact config for it — the endpoint and credential are filled in for you, and the header is built in your browser.
 
 == Changelog ==
 

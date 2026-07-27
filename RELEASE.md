@@ -40,45 +40,51 @@ confirmed to contain all three classes.
 
 ---
 
-## Blockers before publishing
+## Blockers before publishing — all cleared
 
-### 1. Banner and icon — needs a design decision
+### 1. Banner and icon — DONE
 
-`.wordpress-org/` has screenshots only, so the plugin page and search results
-render a generated placeholder next to five competitors with real artwork. This
-is the single highest-leverage cosmetic fix on install rate.
+Generated 2026-07-27 into `.wordpress-org/`: `banner-772x250.png`,
+`banner-1544x500.png`, `icon-256x256.png`, `icon-128x128.png`. Sources are SVG in
+`.wordpress-org/src/`, rendered with `rsvg-convert`, so any edit is a one-line
+re-render rather than a redraw:
 
-Required files, per the [asset guidelines](https://developer.wordpress.org/plugins/wordpress-org/plugin-assets/):
+```bash
+cd .wordpress-org
+rsvg-convert -w 772  -h 250 src/banner.svg -o banner-772x250.png
+rsvg-convert -w 1544 -h 500 src/banner.svg -o banner-1544x500.png
+rsvg-convert -w 256  -h 256 src/icon.svg   -o icon-256x256.png
+rsvg-convert -w 128  -h 128 src/icon.svg   -o icon-128x128.png
+```
 
-| File | Size | Notes |
-| --- | --- | --- |
-| `banner-772x250.png` | 772 × 250 | required; max 4 MB |
-| `banner-1544x500.png` | 1544 × 500 | retina |
-| `icon-256x256.png` | 256 × 256 | retina; max 1 MB |
-| `icon-128x128.png` | 128 × 128 | standard |
+Design is a mint-to-cyan check inside a rounded diamond on a deep indigo
+gradient — the approval gate, which is the product's actual differentiator —
+with the wordmark and "Agents propose. You approve."
 
-`icon.svg` may replace both PNG icons. All of these go in the **SVN `assets/`
-directory**, never in `trunk/` — they are not part of the plugin.
+These go in the **SVN `assets/` directory**, never in `trunk/`; they are page
+assets, not plugin files, and `.distignore` keeps them out of the ZIP.
 
-### 2. Refresh screenshot 1
+### 2. Screenshots — DONE
 
-The settings screen gained the agent picker, the rate-limit field, and the
-connected-agents table. `screenshot-1.png` predates all three, and its caption in
-`readme.txt` has already been updated to describe the new UI — so the image and
-the caption currently disagree.
+Recaptured 2026-07-27 at 1100 × 800 from the live install via Playwright:
 
-Capture at 1200 px wide against the local install, logged in as an admin, at
-`/site/wp-admin/options-general.php?page=flavoursuite-ai`.
+- `screenshot-1.png` — settings top: master switch, the twelve tool toggles with
+  write tools flagged red, and the rate limit.
+- `screenshot-3.png` — the connect section with the agent picker on Cursor,
+  showing the file hint and the generated JSON.
 
-### 3. Confirm the Codex CLI recipe
+`screenshot-2.png` (approvals diff) is unchanged and still accurate, though it is
+1535 × 730 and so does not match the other two. Worth reshooting for consistency
+next time there is a pending change request in the dev database.
 
-`ClientProfiles.php` uses an `[mcp_servers.flavoursuite.http_headers]` table for
-Codex. That key is the one entry in the registry not verified against a running
-client. Either confirm it against current Codex docs, or drop the profile and let
-Codex users take the stdio-bridge recipe, which is known to work.
+### 3. Codex CLI recipe — DONE
 
-Everything else in the registry is either a format I verified parses, or
-(for the cloud connectors) just the endpoint URL.
+Verified against the Codex docs. `url` and `http_headers` were the right keys,
+but the documented form is an inline table, so the template now reads
+`http_headers = { "Authorization" = "…" }` rather than a sub-section. Both are
+valid TOML; matching the docs avoids confusing users. Streamable HTTP needs no
+experimental flag. The profile note now also mentions `auth = "oauth"` as an
+alternative to carrying a header.
 
 ---
 
