@@ -126,10 +126,16 @@ name must equal the readme `Stable tag:` value exactly.
 
 ## Dev environment notes
 
-- **Run `composer dump-autoload` after adding any class under `includes/`.**
-  The Jetpack Autoloader classmap is static; a new file that is not in it throws
-  a fatal on boot. This bites the symlinked dev tree only — release ZIPs
-  regenerate the map during the build.
+- **Adding a class under `includes/` needs no build step.** `Lifecycle` prepends
+  a PSR-4 loader for `FlavourSuite\Ai\`, so our own classes resolve straight from
+  disk. Before that existed, a new file missing from the compiled Jetpack
+  classmap fataled on boot while lint and the ZIP build both passed.
+- **The Jetpack Autoloader still handles `vendor/`, and must.** WooCommerce ships
+  its own copy of `wordpress/mcp-adapter`; the adapter has global hook names and a
+  singleton, so exactly one copy must win site-wide and it must be the newest.
+  Jetpack is what arbitrates that. Do not replace it with a plain Composer
+  autoloader, and do not scope the adapter with PHP-Scoper or Mozart — prefixing
+  it would create a second, isolated MCP singleton competing with WooCommerce's.
 - The dev tree is symlinked into `/var/www/html/site/wp-content/plugins/`, so
   edits are live immediately. Apache and MariaDB must be running.
 - `wp eval` with `wp_set_current_user()` renders admin screens headlessly, which

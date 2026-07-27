@@ -20,6 +20,16 @@ final class Lifecycle {
 		define( 'FLAVOURSUITE_AI_DIR', plugin_dir_path( $main_file ) );
 		define( 'FLAVOURSUITE_AI_URL', plugin_dir_url( $main_file ) );
 
+		// Our own classes first, resolved straight from the filesystem.
+		//
+		// The Jetpack classmap below is compiled at composer time, so a class
+		// added under includes/ without a subsequent `composer dump-autoload`
+		// is simply absent from it and fatals on boot. FlavourSuite\Ai\* is
+		// never shared with another plugin, so it needs none of Jetpack's
+		// version arbitration — a direct PSR-4 lookup is both correct and
+		// immune to a stale map.
+		self::register_autoloader();
+
 		// Jetpack Autoloader: mcp-adapter is shared infrastructure (global hook
 		// names, singleton) — the newest copy on the site must win. WooCommerce
 		// ships the same package the same way.
@@ -31,6 +41,41 @@ final class Lifecycle {
 		}
 
 		add_action( 'plugins_loaded', array( self::class, 'boot_kernel' ), 5 );
+	}
+
+	/**
+	 * PSR-4 loader for this plugin's own namespace.
+	 *
+	 * Prepended so it always answers before the Jetpack classmap: our classes
+	 * live in exactly one place, and resolving them from disk means adding a
+	 * file never requires regenerating anything.
+	 */
+	private static function register_autoloader(): void {
+		spl_autoload_register(
+			static function ( $class ): void {
+				$prefix = 'FlavourSuite\\Ai\\';
+
+				if ( 0 !== strpos( (string) $class, $prefix ) ) {
+					return;
+				}
+
+				$relative = substr( (string) $class, strlen( $prefix ) );
+
+				// Class names cannot contain traversal sequences, but the input
+				// reaches us from a global hook — validate rather than assume.
+				if ( ! preg_match( '/^[A-Za-z0-9_\\\\]+$/', $relative ) ) {
+					return;
+				}
+
+				$path = FLAVOURSUITE_AI_DIR . 'includes/' . str_replace( '\\', '/', $relative ) . '.php';
+
+				if ( is_readable( $path ) ) {
+					require_once $path;
+				}
+			},
+			true,
+			true
+		);
 	}
 
 	public static function boot_kernel(): void {
