@@ -60,16 +60,50 @@ viable: abilities are a registry we can wrap, not a protocol we must fork.
 
 **Core has no plans for code generation.** That space is unclaimed by core.
 
-### Automattic bought the incumbent
+### Automattic bought the incumbent — and pointed it somewhere else
 
-`codewp.ai` now 301s to `telex.automattic.ai` — "AI-Assisted Authoring Environment
-for WordPress". CodeWP was *the* WordPress AI code-generation product. The page is
-JS-rendered and would not yield details to a fetch; **worth a manual look before
-committing to Phase 2.**
+`codewp.ai` now 301s to `telex.automattic.ai`. CodeWP was *the* WordPress AI
+code-generation product. **Inspected in-browser 2026-07-27** (the page is
+JS-rendered and yields nothing to a fetch):
 
-Signal regardless of the details: Automattic considers AI-authored WordPress code
-strategically important enough to buy the category leader. That validates the
-direction and warns that a well-funded competitor is in it.
+> "Telex is a natural language WordPress **block and theme** builder created by
+> Automattic AI Labs… describe what you want, preview the result, and **download a
+> ready-to-install plugin or theme** to your site."
+
+The decisive details, all from their FAQ:
+
+- It builds **new blocks and block themes**. Nothing else.
+- Delivery is **"click the download button to get a .zip file, then install it like
+  any WordPress plugin or theme through your admin dashboard."**
+- Preview happens on **WordPress Playground** (WASM WordPress in the browser).
+- It has **no connection to a live site whatsoever** — no API, no MCP, no agent
+  access, no credentials.
+- It cannot touch an existing plugin, an existing setting, or existing content.
+- Self-described as experimental; sessions "sometimes reset unexpectedly."
+
+**This is a different product category, not a competitor.** Telex is greenfield
+generation with manual ZIP delivery. FlavourSuite is governed change to a site that
+already exists. The overlap is zero.
+
+Three things follow, and they are the most useful findings in this document:
+
+1. **Do not build code generation.** Automattic is doing it with a research lab, and
+   the agent our users already run — Claude Code, Cursor — generates better WordPress
+   code than we ever will. Generation is commodity. We should never write a
+   `generate-plugin` tool.
+2. **The gap Telex leaves open is delivery and governance.** "Download a .zip, then
+   install it through your admin dashboard" is the manual step every vibe coder is
+   trying to escape. Nothing in the ecosystem safely gets AI-authored code *onto a
+   running site* — that is exactly the shape of our approval queue.
+3. **Steal the Playground idea.** Telex previews generated code in a sandboxed WASM
+   WordPress rather than trusting it. The same move belongs in our approval UI:
+   preview a proposed change in a throwaway sandbox before approving. Ambitious, not
+   Phase 1 — but it is the correct long-term answer to "how does a non-developer
+   review a diff they cannot read", which is the unsolved problem in §5.
+
+Signal on positioning: Automattic considered AI-authored WordPress code important
+enough to buy the category leader, then aimed it at **new artefacts**, sandboxed,
+with a manual install step. Even they would not point generated code at a live site.
 
 ### The competitive table in ROADMAP.md is missing the biggest player
 
@@ -296,18 +330,31 @@ types. Frontend and site-level changes.
 **Phase 5 — native snippet runner.** Only if Phases 1–4 land well and demand is
 evidenced. Everything in §5 is mandatory, not aspirational.
 
-**Not planned:** installing plugins from arbitrary ZIP URLs (supply-chain hole),
-deleting plugins or themes (irreversible), arbitrary SQL (AI Engine offers it; it is
-a data-loss incident waiting to happen), and direct theme-file editing (use
-templates and snippets).
+**Not planned:**
+
+- **Generating code ourselves.** No `generate-plugin` tool, no bundled model, no
+  prompt templates. The connected agent already generates better WordPress code than
+  we would, and Automattic has a research lab pointed at this (§2). Our job starts
+  where the code exists and ends when it is safely live.
+- Installing plugins from arbitrary ZIP URLs — supply-chain hole.
+- Deleting plugins or themes — irreversible.
+- Arbitrary SQL. AI Engine offers it; it is a data-loss incident waiting to happen.
+- Direct theme-file editing — use `template` and `snippet` instead.
+
+**Parked, not rejected: Playground preview.** Render a proposed change inside a
+sandboxed WASM WordPress before approving, the way Telex previews generated blocks.
+It is the only credible answer to "how does a non-developer review a diff they cannot
+read", which §5 otherwise leaves unsolved. Too large for this plan; revisit after
+Phase 4.
 
 ---
 
 ## 7. Open questions
 
-1. **What is Telex, exactly?** Needs a manual browser look — the page is
-   JS-rendered. If Automattic is shipping agent-authored WordPress code with
-   first-party distribution, Phase 3/5 positioning changes.
+1. ~~**What is Telex, exactly?**~~ **Answered 2026-07-27.** A block and theme
+   builder that delivers a ZIP for manual install and never touches a live site.
+   Not a competitor; it strengthens the case for being the delivery-and-governance
+   layer rather than a generator. See §2.
 2. **Does `core/manage-settings` land in AI Plugin 1.3.0 as expected**, and does it
    expose a hook we can intercept cleanly? Watch `make.wordpress.org/ai`.
 3. **Will wp.org review accept agent-authored PHP behind an approval gate?** No
@@ -322,7 +369,7 @@ templates and snippets).
 - [WordPress AI team](https://make.wordpress.org/ai/) — abilities roadmap, management abilities in 1.3.0, MCP adapter cadence
 - [WordPress AI team 2026 archive](https://make.wordpress.org/ai/2026/) — `core/manage-settings`, transport-decoupling principle
 - [Official AI plugin](https://wordpress.org/plugins/ai/) — 40k installs, read-only abilities, no MCP server yet
-- [Telex](https://telex.automattic.ai/) — CodeWP's successor under Automattic
+- [Telex](https://telex.automattic.ai/) and [its FAQ](https://telex.automattic.ai/faq) — CodeWP's successor under Automattic AI Labs; blocks and themes, ZIP delivery, Playground preview, no site connection
 - [AI Engine](https://wordpress.org/plugins/ai-engine/) and [its MCP docs](https://ai.thehiddendocs.com/mcp/) — 100k installs, tool tiers, RBAC
 - [WPCode](https://wordpress.org/plugins/insert-headers-and-footers/) — 3M installs, fatal-error auto-deactivation
 - [Code Snippets](https://wordpress.org/plugins/code-snippets/) — 1M installs, AI limited to HTML/CSS/JS
